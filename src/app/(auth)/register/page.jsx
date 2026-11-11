@@ -38,11 +38,17 @@ export default function RegisterPage() {
 
       if (error) {
         setErrorMsg(error.message);
+      } else if (!data.session) {
+        setSuccessMsg("Conta criada com sucesso! Verifique seu e-mail caso a confirmação esteja ativada, ou prossiga para o login.");
+        setTimeout(() => {
+          router.push("/login");
+        }, 2500);
       } else {
         setSuccessMsg("Conta criada com sucesso! Redirecionando...");
         setTimeout(() => {
           router.push("/");
-        }, 1200);
+          router.refresh();
+        }, 800);
       }
     } catch (err) {
       setErrorMsg("Ocorreu um erro ao criar a conta.");

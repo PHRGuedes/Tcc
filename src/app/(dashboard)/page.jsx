@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { KpiGrid } from "@/components/modules/dashboard/kpi-grid";
 import { StatusDonutChart } from "@/components/modules/dashboard/status-donut";
@@ -18,7 +18,7 @@ export default function DashboardPage() {
     implemented: 5,
   });
   const [activities, setActivities] = useState([]);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -78,7 +78,7 @@ export default function DashboardPage() {
     }
 
     loadDashboardData();
-  }, [activeProject]);
+  }, [activeProject, supabase]);
 
   const chartData = [
     { name: "Aprovados", value: stats.approved, color: "#16a34a" },

@@ -1,18 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export function useAuth() {
+  const router = useRouter();
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState({
-    id: "11111111-1111-1111-1111-111111111111",
-    full_name: "Ana Ribeiro",
-    email: "ana.ribeiro@reqflow.com",
-    role: "requirements_analyst",
-  });
+  const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     async function loadUser() {
@@ -39,9 +36,14 @@ export function useAuth() {
               role: user.user_metadata?.role || "requirements_analyst",
             });
           }
+        } else {
+          setUser(null);
+          setProfile(null);
         }
       } catch (err) {
         console.warn("Auth check:", err);
+        setUser(null);
+        setProfile(null);
       } finally {
         setLoading(false);
       }
@@ -59,20 +61,31 @@ export function useAuth() {
           .select("*")
           .eq("id", session.user.id)
           .single();
-        if (profileData) setProfile(profileData);
+        if (profileData) {
+          setProfile(profileData);
+        } else {
+          setProfile({
+            id: session.user.id,
+            full_name: session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "Usuário",
+            email: session.user.email,
+            role: session.user.user_metadata?.role || "requirements_analyst",
+          });
+        }
       } else {
         setUser(null);
+        setProfile(null);
       }
     });
 
     return () => {
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [supabase]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    window.location.href = "/login";
+    router.push("/login");
+    router.refresh();
   };
 
   return { user, profile, loading, signOut };

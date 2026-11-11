@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Calendar,
   GripVertical,
@@ -98,7 +98,7 @@ export function KanbanColumn({ column, stories = [], onMoveStatus }) {
 
 export default function BacklogPage() {
   const { activeProject } = useProject();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [sprint, setSprint] = useState({
     name: "Sprint 4 — Rastreabilidade & Qualidade",
@@ -195,7 +195,7 @@ export default function BacklogPage() {
     }
 
     loadBacklog();
-  }, [activeProject]);
+  }, [activeProject, supabase]);
 
   const order = [
     STORY_STATUSES.BACKLOG,

@@ -8,8 +8,8 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("ana.ribeiro@reqflow.com");
-  const [password, setPassword] = useState("12345678");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const supabase = createClient();
@@ -26,14 +26,7 @@ export default function LoginPage() {
       });
 
       if (error) {
-        // Se usuário ainda não existe no auth do Supabase, tenta logar ou simular
         console.warn("Auth Supabase:", error.message);
-        // Se falhar (ex: usuário demo ainda não registrado no Auth remoto), permite navegação demo
-        if (email.includes("@reqflow.com")) {
-          router.push("/");
-          router.refresh();
-          return;
-        }
         setErrorMsg(error.message || "Credenciais inválidas. Verifique seu e-mail e senha.");
       } else {
         router.push("/");

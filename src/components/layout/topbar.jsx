@@ -8,14 +8,14 @@ import { getInitials } from "@/lib/utils/formatters";
 import { ROLE_LABELS } from "@/lib/constants/roles";
 
 export function Topbar({ title = "Dashboard" }) {
-  const { profile } = useAuth();
+  const { profile, loading } = useAuth();
   const { activeProject, projects, setActiveProject } = useProject();
   const [showProjectMenu, setShowProjectMenu] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
 
-  const userInitials = getInitials(profile?.full_name || "Ana Ribeiro");
-  const roleLabel = ROLE_LABELS[profile?.role] || profile?.role || "Analista de Requisitos";
+  const userInitials = profile?.full_name ? getInitials(profile.full_name) : "--";
+  const roleLabel = profile?.role ? (ROLE_LABELS[profile.role] || profile.role) : (loading ? "Carregando..." : "");
 
   const handleCreateProject = (e) => {
     e.preventDefault();
@@ -108,7 +108,7 @@ export function Topbar({ title = "Dashboard" }) {
           </div>
           <div className="flex flex-col text-left">
             <span className="text-sm font-semibold text-slate-800 leading-tight">
-              {profile?.full_name || "Ana Ribeiro"}
+              {profile?.full_name || (loading ? "Carregando..." : "Não autenticado")}
             </span>
             <span className="text-xs text-slate-500 font-normal">
               {roleLabel}

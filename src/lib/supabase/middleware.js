@@ -34,15 +34,14 @@ export async function updateSession(request) {
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
 
-  // Redirecionar usuário não logado tentando acessar rotas do painel
-  if (!user && !isAuthPage && request.nextUrl.pathname !== "/") {
-    // Para permitir navegação e testes no protótipo, podemos redirecionar para login
+  // Redirecionar usuário não logado tentando acessar qualquer rota protegida (inclusive "/")
+  if (!user && !isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Se já logado e acessar login, redirecionar para o dashboard principal
+  // Se já logado e acessar rotas de autenticação, redirecionar para o dashboard principal
   if (user && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";

@@ -31,22 +31,45 @@ ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
 
 -- Trigger para atualizar profiles automaticamente no signup do Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
-    INSERT INTO public.profiles (id, full_name, email, role, avatar_url)
-    VALUES (
-        NEW.id,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-        NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'role', 'requirements_analyst'),
-        COALESCE(NEW.raw_user_meta_data->>'avatar_url', NULL)
-    )
-    ON CONFLICT (id) DO UPDATE
-    SET full_name = EXCLUDED.full_name,
-        email = EXCLUDED.email;
+    -- Se o e-mail já existe no profiles (ex: vindo do seed mock), atualiza o ID do perfil para o novo UUID do auth.users
+    IF EXISTS (SELECT 1 FROM public.profiles WHERE email = NEW.email) THEN
+        UPDATE public.profiles
+        SET id = NEW.id,
+            full_name = COALESCE(NEW.raw_user_meta_data->>'full_name', full_name),
+            role = COALESCE(NEW.raw_user_meta_data->>'role', role),
+            avatar_url = COALESCE(NEW.raw_user_meta_data->>'avatar_url', avatar_url),
+            updated_at = timezone('utc'::text, now())
+        WHERE email = NEW.email;
+    ELSE
+        INSERT INTO public.profiles (id, full_name, email, role, avatar_url)
+        VALUES (
+            NEW.id,
+            COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+            NEW.email,
+            COALESCE(NEW.raw_user_meta_data->>'role', 'requirements_analyst'),
+            COALESCE(NEW.raw_user_meta_data->>'avatar_url', NULL)
+        )
+        ON CONFLICT (id) DO UPDATE
+        SET full_name = EXCLUDED.full_name,
+            email = EXCLUDED.email,
+            role = EXCLUDED.role,
+            updated_at = timezone('utc'::text, now());
+    END IF;
+
     RETURN NEW;
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Proteção defensiva para nunca bloquear a criação de conta no auth.users
+        RAISE WARNING 'Erro ao registrar profile no trigger handle_new_user: %', SQLERRM;
+        RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -244,6 +267,11 @@ CREATE POLICY "Usuários podem atualizar seu próprio perfil"
     ON public.profiles FOR UPDATE
     TO authenticated
     USING (auth.uid() = id);
+
+CREATE POLICY "Permitir inserção de perfil"
+    ON public.profiles FOR INSERT
+    TO authenticated, anon, service_role
+    WITH CHECK (true);
 
 -- POLÍTICAS PARA PROJETOS E MEMBROS
 CREATE POLICY "Visualização de projetos permitida para membros ou admin"
