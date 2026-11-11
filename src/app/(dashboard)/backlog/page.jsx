@@ -9,6 +9,9 @@ import {
   ArrowRight,
   ArrowLeft,
   ChevronRight,
+  X,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { PriorityBadge } from "@/components/ui/badge";
@@ -96,6 +99,174 @@ export function KanbanColumn({ column, stories = [], onMoveStatus }) {
   );
 }
 
+function SprintModal({ activeProject, supabase, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name: "",
+    goal: "",
+    start_date: "",
+    end_date: "",
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!form.name.trim()) {
+      setError("O nome da sprint é obrigatório.");
+      return;
+    }
+    if (!activeProject?.id) {
+      setError("Nenhum projeto ativo selecionado.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { data, error: dbError } = await supabase
+        .from("sprints")
+        .insert({
+          project_id: activeProject.id,
+          name: form.name.trim(),
+          goal: form.goal.trim() || null,
+          start_date: form.start_date || null,
+          end_date: form.end_date || null,
+          status: "active",
+        })
+        .select()
+        .single();
+
+      if (dbError) {
+        setError(`Erro ao salvar: ${dbError.message}`);
+        return;
+      }
+
+      onSaved(data);
+    } catch (err) {
+      console.error("Erro inesperado ao criar sprint:", err);
+      setError("Ocorreu um erro inesperado. Tente novamente.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Nova Sprint</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Defina o nome, objetivo e período da sprint.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSave} className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Nome */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Nome da Sprint <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="Ex.: Sprint 5 — Autenticação"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Objetivo */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Objetivo da Sprint
+            </label>
+            <textarea
+              rows={2}
+              placeholder="O que a equipe deve entregar ao final desta sprint?"
+              value={form.goal}
+              onChange={(e) => setForm({ ...form, goal: e.target.value })}
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+
+          {/* Datas */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Data de Início
+              </label>
+              <input
+                type="date"
+                value={form.start_date}
+                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Data de Término
+              </label>
+              <input
+                type="date"
+                value={form.end_date}
+                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving}
+              className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs flex items-center gap-2 transition-colors disabled:opacity-60"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-3.5 h-3.5" />
+                  Criar Sprint
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function BacklogPage() {
   const { activeProject } = useProject();
   const supabase = useMemo(() => createClient(), []);
@@ -108,6 +279,7 @@ export default function BacklogPage() {
   });
 
   const [stories, setStories] = useState([]);
+  const [showSprintModal, setShowSprintModal] = useState(false);
 
   useEffect(() => {
     async function loadBacklog() {
@@ -275,6 +447,28 @@ export default function BacklogPage() {
     <>
       <Topbar title="Backlog & Sprints" />
 
+      {/* Modal de Nova Sprint */}
+      {showSprintModal && (
+        <SprintModal
+          activeProject={activeProject}
+          supabase={supabase}
+          onClose={() => setShowSprintModal(false)}
+          onSaved={(saved) => {
+            setSprint({
+              name: saved.name,
+              startDate: saved.start_date
+                ? new Date(saved.start_date).toLocaleDateString("pt-BR")
+                : "--",
+              endDate: saved.end_date
+                ? new Date(saved.end_date).toLocaleDateString("pt-BR")
+                : "--",
+              progress: 0,
+            });
+            setShowSprintModal(false);
+          }}
+        />
+      )}
+
       <div className="p-8 max-w-7xl w-full mx-auto">
         {/* Sprint Header Banner Card */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -290,16 +484,27 @@ export default function BacklogPage() {
             </div>
           </div>
 
-          <div className="w-full md:w-72">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5">
-              <span>Progresso da sprint</span>
-              <span className="text-blue-600 font-bold">{sprint.progress}%</span>
-            </div>
-            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                style={{ width: `${sprint.progress}%` }}
-              />
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Botão Nova Sprint */}
+            <button
+              onClick={() => setShowSprintModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Nova Sprint
+            </button>
+
+            <div className="w-full md:w-64">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-700 mb-1.5">
+                <span>Progresso da sprint</span>
+                <span className="text-blue-600 font-bold">{sprint.progress}%</span>
+              </div>
+              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                  style={{ width: `${sprint.progress}%` }}
+                />
+              </div>
             </div>
           </div>
         </div>
