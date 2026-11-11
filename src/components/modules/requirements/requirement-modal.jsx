@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, History, Send, Check } from "lucide-react";
+import { X, History, Send, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useProject } from "@/components/layout/project-context";
@@ -43,6 +43,7 @@ export function RequirementModal({
 
   const [versions, setVersions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     if (requirement) {
@@ -126,15 +127,41 @@ export function RequirementModal({
 
   const handleSubmit = async (e, sendToApproval = false) => {
     e.preventDefault();
+    setErrorMsg("");
     setIsSubmitting(true);
 
     try {
+      const normalizedCode = formData.code.trim().toUpperCase();
+
+      // --- Validação de código duplicado (apenas para novos requisitos) ---
+      if (!isEditing) {
+        const { data: existing, error: checkError } = await supabase
+          .from("requirements")
+          .select("id, code")
+          .eq("code", normalizedCode)
+          .maybeSingle();
+
+        if (checkError) {
+          setErrorMsg(`Erro ao verificar o código: ${checkError.message}`);
+          setIsSubmitting(false);
+          return;
+        }
+
+        if (existing) {
+          setErrorMsg(
+            `O código "${normalizedCode}" já está em uso. Escolha um código diferente, como REQ-${Math.floor(100 + Math.random() * 900)}.`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const finalStatus = sendToApproval
         ? REQUIREMENT_STATUSES.UNDER_REVIEW
         : formData.status;
 
       const payload = {
-        code: formData.code,
+        code: normalizedCode,
         title: formData.title || formData.description.slice(0, 40) || "Sem título",
         type: formData.type,
         description: formData.description,
@@ -157,19 +184,26 @@ export function RequirementModal({
           .select()
           .single();
 
-        if (!error && data) {
-          savedReq = data;
-          // Gravar versão
-          await supabase.from("requirement_versions").insert({
-            requirement_id: requirement.id,
-            version_number: (requirement.current_version || 1) + 1,
-            changed_by: profile?.id && profile.id.trim() !== "" ? profile.id : null,
-            change_summary: sendToApproval
-              ? "Requisito enviado para aprovação."
-              : "Atualização dos dados do requisito.",
-            snapshot: payload,
-          });
+        if (error) {
+          setErrorMsg(
+            error.code === "23505"
+              ? `O código "${normalizedCode}" já existe no sistema. Utilize um código único.`
+              : `Erro ao atualizar: ${error.message}`
+          );
+          return;
         }
+
+        savedReq = data;
+
+        await supabase.from("requirement_versions").insert({
+          requirement_id: requirement.id,
+          version_number: (requirement.current_version || 1) + 1,
+          changed_by: profile?.id && profile.id.trim() !== "" ? profile.id : null,
+          change_summary: sendToApproval
+            ? "Requisito enviado para aprovação."
+            : "Atualização dos dados do requisito.",
+          snapshot: payload,
+        });
       } else {
         const { data, error } = await supabase
           .from("requirements")
@@ -177,32 +211,38 @@ export function RequirementModal({
           .select()
           .single();
 
-        if (!error && data) {
-          savedReq = data;
-          // Vincular ao projeto ativo
-          if (activeProject?.id) {
-            await supabase.from("project_requirements").insert({
-              project_id: activeProject.id,
-              requirement_id: data.id,
-            });
-          }
-          // Vincular à User Story selecionada
-          if (formData.user_story_id && formData.user_story_id.trim() !== "") {
-            await supabase.from("requirement_user_stories").insert({
-              requirement_id: data.id,
-              user_story_id: formData.user_story_id,
-            });
-          }
+        if (error) {
+          setErrorMsg(
+            error.code === "23505"
+              ? `O código "${normalizedCode}" já existe no sistema. Utilize um código único.`
+              : `Erro ao salvar: ${error.message}`
+          );
+          return;
+        }
+
+        savedReq = data;
+
+        if (activeProject?.id) {
+          await supabase.from("project_requirements").insert({
+            project_id: activeProject.id,
+            requirement_id: data.id,
+          });
+        }
+
+        if (formData.user_story_id && formData.user_story_id.trim() !== "") {
+          await supabase.from("requirement_user_stories").insert({
+            requirement_id: data.id,
+            user_story_id: formData.user_story_id,
+          });
         }
       }
 
-      onSaveSuccess?.(savedReq || { ...formData, id: requirement?.id || crypto.randomUUID() });
+      // Só fecha o modal e notifica quando o salvamento foi confirmado
+      onSaveSuccess?.(savedReq);
       onClose();
     } catch (err) {
-      console.warn("Erro ao salvar requisito:", err);
-      // Fallback otimista para demonstração imediata
-      onSaveSuccess?.({ ...formData, id: requirement?.id || crypto.randomUUID() });
-      onClose();
+      console.error("Erro inesperado ao salvar requisito:", err);
+      setErrorMsg("Ocorreu um erro inesperado ao salvar o requisito. Tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
@@ -233,6 +273,13 @@ export function RequirementModal({
         <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Form (8 cols) */}
           <form id="req-form" className="lg:col-span-8 space-y-4">
+            {/* Banner de erro */}
+            {errorMsg && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
             {/* ID & Tipo */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -242,7 +289,7 @@ export function RequirementModal({
                 <input
                   type="text"
                   value={formData.code}
-                  onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-800"
                 />
               </div>
