@@ -11,11 +11,11 @@ import { createClient } from "@/lib/supabase/client";
 export default function DashboardPage() {
   const { activeProject } = useProject();
   const [stats, setStats] = useState({
-    total: 44,
-    pending: 8,
-    approved: 21,
-    inDevelopment: 10,
-    implemented: 5,
+    total: 0,
+    pending: 0,
+    approved: 0,
+    inDevelopment: 0,
+    implemented: 0,
   });
   const [activities, setActivities] = useState([]);
   const supabase = useMemo(() => createClient(), []);
@@ -25,10 +25,13 @@ export default function DashboardPage() {
       if (!activeProject?.id) return;
 
       try {
-        // Buscar contagem de requisitos
-        const { data: reqs } = await supabase
-          .from("requirements")
-          .select("id, status");
+        // Buscar contagem de requisitos vinculados ao projeto ativo
+        const { data: linked } = await supabase
+          .from("project_requirements")
+          .select("requirement:requirements(id, status)")
+          .eq("project_id", activeProject.id);
+
+        const reqs = (linked || []).map((l) => l.requirement).filter(Boolean);
 
         if (reqs && reqs.length > 0) {
           const total = reqs.length;
@@ -50,12 +53,31 @@ export default function DashboardPage() {
             inDevelopment,
             implemented,
           });
+        } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
+          // Projeto mock inicial
+          setStats({
+            total: 44,
+            pending: 8,
+            approved: 21,
+            inDevelopment: 10,
+            implemented: 5,
+          });
+        } else {
+          // Projeto novo vazio
+          setStats({
+            total: 0,
+            pending: 0,
+            approved: 0,
+            inDevelopment: 0,
+            implemented: 0,
+          });
         }
 
-        // Buscar atividades recentes de auditoria
+        // Buscar atividades recentes de auditoria do projeto ativo
         const { data: logs } = await supabase
           .from("audit_logs")
           .select("id, action, description, created_at, profiles(full_name)")
+          .eq("project_id", activeProject.id)
           .order("created_at", { ascending: false })
           .limit(5);
 
@@ -71,6 +93,8 @@ export default function DashboardPage() {
               }),
             }))
           );
+        } else {
+          setActivities([]);
         }
       } catch (err) {
         console.warn("Dashboard fetch:", err);
@@ -78,7 +102,7 @@ export default function DashboardPage() {
     }
 
     loadDashboardData();
-  }, [activeProject, supabase]);
+  }, [activeProject?.id, supabase]);
 
   const chartData = [
     { name: "Aprovados", value: stats.approved, color: "#16a34a" },

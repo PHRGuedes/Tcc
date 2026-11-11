@@ -99,3 +99,28 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+-- 5. Garantir permissões e políticas RLS para criação de projetos
+ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.project_members ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Criação de projetos por usuários autenticados" ON public.projects;
+CREATE POLICY "Criação de projetos por usuários autenticados"
+    ON public.projects FOR INSERT
+    TO authenticated
+    WITH CHECK (auth.uid() = created_by OR get_current_user_role() IN ('admin', 'project_manager', 'product_owner', 'requirements_analyst'));
+
+DROP POLICY IF EXISTS "Atualização de projetos pelo criador ou admin" ON public.projects;
+CREATE POLICY "Atualização de projetos pelo criador ou admin"
+    ON public.projects FOR UPDATE
+    TO authenticated
+    USING (created_by = auth.uid() OR get_current_user_role() = 'admin');
+
+DROP POLICY IF EXISTS "Inserção de membros de projeto" ON public.project_members;
+CREATE POLICY "Inserção de membros de projeto"
+    ON public.project_members FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
+
+GRANT ALL ON TABLE public.projects TO authenticated, service_role;
+GRANT ALL ON TABLE public.project_members TO authenticated, service_role;
+

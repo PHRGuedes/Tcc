@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, Search, BookOpen, Layers, User, Tag } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { PriorityBadge } from "@/components/ui/badge";
@@ -9,70 +9,15 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function UserStoriesPage() {
   const { activeProject } = useProject();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [search, setSearch] = useState("");
-  const [stories, setStories] = useState([
-    {
-      id: "us-01",
-      code: "US-01",
-      title: "Autenticação de usuários",
-      as_a: "usuário cadastrado",
-      i_want: "realizar login com meu e-mail e senha de forma segura",
-      so_that: "eu possa acessar o painel de requisitos e meus projetos",
-      priority: "high",
-      status: "done",
-      rf_codes: ["REQ-001"],
-    },
-    {
-      id: "us-02",
-      code: "US-02",
-      title: "Painel de indicadores",
-      as_a: "analista de requisitos",
-      i_want: "visualizar gráficos de status e métricas de completude",
-      so_that: "eu possa monitorar a saúde do projeto em tempo hábil",
-      priority: "high",
-      status: "in_progress",
-      rf_codes: ["REQ-002"],
-    },
-    {
-      id: "us-03",
-      code: "US-03",
-      title: "Gestão de requisitos (CRUD)",
-      as_a: "analista de requisitos",
-      i_want: "cadastrar, editar e categorizar RFs e RNFs",
-      so_that: "a especificação do software fique documentada e organizada",
-      priority: "high",
-      status: "in_progress",
-      rf_codes: ["REQ-004"],
-    },
-    {
-      id: "us-04",
-      code: "US-04",
-      title: "Histórico de versões",
-      as_a: "desenvolvedor ou auditor",
-      i_want: "consultar alterações anteriores de um requisito com justificativa",
-      so_that: "eu entenda o porquê de cada modificação ao longo do tempo",
-      priority: "medium",
-      status: "todo",
-      rf_codes: ["REQ-005"],
-    },
-    {
-      id: "us-05",
-      code: "US-05",
-      title: "Matriz de rastreabilidade",
-      as_a: "gerente de projeto",
-      i_want: "cruzar requisitos com user stories e partes interessadas",
-      so_that: "nenhum requisito seja esquecido ou fique sem implementação",
-      priority: "high",
-      status: "todo",
-      rf_codes: ["REQ-007"],
-    },
-  ]);
+  const [stories, setStories] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [showModal, setShowModal] = useState(false);
   const [newStory, setNewStory] = useState({
-    code: `US-0${stories.length + 1}`,
+    code: "US-01",
     title: "",
     as_a: "",
     i_want: "",
@@ -80,27 +25,139 @@ export default function UserStoriesPage() {
     priority: "medium",
   });
 
-  const handleCreateStory = (e) => {
+  const loadStories = useCallback(async () => {
+    if (!activeProject?.id) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("user_stories")
+        .select("*")
+        .eq("project_id", activeProject.id)
+        .order("code", { ascending: true });
+
+      if (!error && data && data.length > 0) {
+        setStories(data);
+      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
+        setStories([
+          {
+            id: "us-01",
+            code: "US-01",
+            title: "Autenticação de usuários",
+            as_a: "usuário cadastrado",
+            i_want: "realizar login com meu e-mail e senha de forma segura",
+            so_that: "eu possa acessar o painel de requisitos e meus projetos",
+            priority: "high",
+            status: "done",
+            rf_codes: ["REQ-001"],
+          },
+          {
+            id: "us-02",
+            code: "US-02",
+            title: "Painel de indicadores",
+            as_a: "analista de requisitos",
+            i_want: "visualizar gráficos de status e métricas de completude",
+            so_that: "eu possa monitorar a saúde do projeto em tempo hábil",
+            priority: "high",
+            status: "in_progress",
+            rf_codes: ["REQ-002"],
+          },
+          {
+            id: "us-03",
+            code: "US-03",
+            title: "Gestão de requisitos (CRUD)",
+            as_a: "analista de requisitos",
+            i_want: "cadastrar, editar e categorizar RFs e RNFs",
+            so_that: "a especificação do software fique documentada e organizada",
+            priority: "high",
+            status: "in_progress",
+            rf_codes: ["REQ-004"],
+          },
+          {
+            id: "us-04",
+            code: "US-04",
+            title: "Histórico de versões",
+            as_a: "desenvolvedor ou auditor",
+            i_want: "consultar alterações anteriores de um requisito com justificativa",
+            so_that: "eu entenda o porquê de cada modificação ao longo do tempo",
+            priority: "medium",
+            status: "todo",
+            rf_codes: ["REQ-005"],
+          },
+          {
+            id: "us-05",
+            code: "US-05",
+            title: "Matriz de rastreabilidade",
+            as_a: "gerente de projeto",
+            i_want: "cruzar requisitos com user stories e partes interessadas",
+            so_that: "nenhum requisito seja esquecido ou fique sem implementação",
+            priority: "high",
+            status: "todo",
+            rf_codes: ["REQ-007"],
+          },
+        ]);
+      } else {
+        setStories([]);
+      }
+    } catch (err) {
+      console.warn("Erro ao carregar histórias:", err);
+      setStories([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeProject?.id, supabase]);
+
+  useEffect(() => {
+    loadStories();
+  }, [loadStories]);
+
+  useEffect(() => {
+    setNewStory((prev) => ({
+      ...prev,
+      code: `US-0${stories.length + 1}`,
+    }));
+  }, [stories.length]);
+
+  const handleCreateStory = async (e) => {
     e.preventDefault();
-    if (!newStory.title) return;
-    setStories([
-      {
-        ...newStory,
-        id: crypto.randomUUID(),
+    if (!newStory.title || !activeProject?.id) return;
+
+    try {
+      const payload = {
+        project_id: activeProject.id,
+        code: newStory.code,
+        title: newStory.title,
+        as_a: newStory.as_a,
+        i_want: newStory.i_want,
+        so_that: newStory.so_that,
+        priority: newStory.priority,
         status: "backlog",
-        rf_codes: [],
-      },
-      ...stories,
-    ]);
-    setShowModal(false);
-    setNewStory({
-      code: `US-0${stories.length + 2}`,
-      title: "",
-      as_a: "",
-      i_want: "",
-      so_that: "",
-      priority: "medium",
-    });
+      };
+
+      const { data, error } = await supabase
+        .from("user_stories")
+        .insert(payload)
+        .select()
+        .single();
+
+      if (!error && data) {
+        setStories((prev) => [data, ...prev]);
+      } else {
+        setStories((prev) => [{ ...payload, id: crypto.randomUUID() }, ...prev]);
+      }
+
+      setShowModal(false);
+      setNewStory({
+        code: `US-0${stories.length + 2}`,
+        title: "",
+        as_a: "",
+        i_want: "",
+        so_that: "",
+        priority: "medium",
+      });
+    } catch (err) {
+      console.warn("Erro ao salvar história:", err);
+      setShowModal(false);
+    }
   };
 
   const filteredStories = stories.filter(

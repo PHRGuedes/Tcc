@@ -143,8 +143,8 @@ export function RequirementModal({
         status: finalStatus,
         source: formData.source,
         acceptance_criteria: formData.acceptance_criteria,
-        responsible_id: formData.responsible_id || profile?.id,
-        created_by: profile?.id,
+        responsible_id: formData.responsible_id && formData.responsible_id.trim() !== "" ? formData.responsible_id : null,
+        created_by: profile?.id && profile.id.trim() !== "" ? profile.id : null,
       };
 
       let savedReq = null;
@@ -163,7 +163,7 @@ export function RequirementModal({
           await supabase.from("requirement_versions").insert({
             requirement_id: requirement.id,
             version_number: (requirement.current_version || 1) + 1,
-            changed_by: profile?.id,
+            changed_by: profile?.id && profile.id.trim() !== "" ? profile.id : null,
             change_summary: sendToApproval
               ? "Requisito enviado para aprovação."
               : "Atualização dos dados do requisito.",
@@ -187,7 +187,7 @@ export function RequirementModal({
             });
           }
           // Vincular à User Story selecionada
-          if (formData.user_story_id) {
+          if (formData.user_story_id && formData.user_story_id.trim() !== "") {
             await supabase.from("requirement_user_stories").insert({
               requirement_id: data.id,
               user_story_id: formData.user_story_id,

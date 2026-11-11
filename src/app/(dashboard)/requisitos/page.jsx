@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Search, Plus, Eye, Pencil, AlertTriangle, Link2 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { TypeBadge, PriorityBadge, StatusBadge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import {
 
 export default function RequirementsPage() {
   const { activeProject } = useProject();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
@@ -33,11 +33,12 @@ export default function RequirementsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRequirement, setSelectedRequirement] = useState(null);
 
-  // Carregar dados de requisitos e relacionamentos
-  const loadData = async () => {
+  // Carregar dados de requisitos e relacionamentos vinculados ao activeProject
+  const loadData = useCallback(async () => {
+    if (!activeProject?.id) return;
     setLoading(true);
     try {
-      // Buscar stakeholders/perfis
+      // 1. Buscar stakeholders/perfis
       const { data: profilesData } = await supabase
         .from("profiles")
         .select("id, full_name, role, email");
@@ -50,35 +51,67 @@ export default function RequirementsPage() {
       ];
       setStakeholders(profilesData?.length ? profilesData : defaultStakeholders);
 
-      // Buscar User Stories
+      // 2. Buscar User Stories DO PROJETO ATIVO
       const { data: usData } = await supabase
         .from("user_stories")
-        .select("id, code, title");
-
-      const defaultStories = [
-        { id: "d0000001", code: "US-01", title: "Autenticação de usuários" },
-        { id: "d0000002", code: "US-02", title: "Painel de indicadores" },
-        { id: "d0000003", code: "US-03", title: "Gestão de requisitos (CRUD)" },
-        { id: "d0000004", code: "US-04", title: "Histórico de versões" },
-        { id: "d0000005", code: "US-05", title: "Matriz de rastreabilidade" },
-      ];
-      setUserStories(usData?.length ? usData : defaultStories);
-
-      // Buscar Requisitos
-      const { data: reqData, error } = await supabase
-        .from("requirements")
-        .select("*, profiles:responsible_id(full_name)")
+        .select("id, code, title")
+        .eq("project_id", activeProject.id)
         .order("code", { ascending: true });
 
-      if (!error && reqData && reqData.length > 0) {
+      if (usData && usData.length > 0) {
+        setUserStories(usData);
+      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
+        setUserStories([
+          { id: "d0000001", code: "US-01", title: "Autenticação de usuários" },
+          { id: "d0000002", code: "US-02", title: "Painel de indicadores" },
+          { id: "d0000003", code: "US-03", title: "Gestão de requisitos (CRUD)" },
+          { id: "d0000004", code: "US-04", title: "Histórico de versões" },
+          { id: "d0000005", code: "US-05", title: "Matriz de rastreabilidade" },
+        ]);
+      } else {
+        setUserStories([]);
+      }
+
+      // 3. Buscar Requisitos vinculados ao PROJETO ATIVO via project_requirements
+      const { data: linkedData, error } = await supabase
+        .from("project_requirements")
+        .select(`
+          requirement:requirements (
+            id,
+            code,
+            title,
+            description,
+            type,
+            priority,
+            status,
+            justification,
+            source,
+            acceptance_criteria,
+            is_incomplete,
+            responsible_id,
+            created_by,
+            current_version,
+            created_at,
+            updated_at,
+            profiles:responsible_id(full_name)
+          )
+        `)
+        .eq("project_id", activeProject.id);
+
+      if (!error && linkedData && linkedData.length > 0) {
+        const projectReqs = linkedData
+          .map((item) => item.requirement)
+          .filter(Boolean)
+          .sort((a, b) => a.code.localeCompare(b.code));
+
         setRequirements(
-          reqData.map((r) => ({
+          projectReqs.map((r) => ({
             ...r,
             responsible_name: r.profiles?.full_name || "Não atribuído",
           }))
         );
-      } else {
-        // Fallback idêntico a gestao de requisitos.jpg
+      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
+        // Fallback apenas para o projeto demo do seed caso o banco não esteja populado
         setRequirements([
           {
             id: "1",
@@ -161,17 +194,21 @@ export default function RequirementsPage() {
             is_incomplete: false,
           },
         ]);
+      } else {
+        // Projeto novo vazio
+        setRequirements([]);
       }
     } catch (err) {
       console.warn("Erro ao buscar requisitos:", err);
+      setRequirements([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeProject?.id, supabase]);
 
   useEffect(() => {
     loadData();
-  }, [activeProject]);
+  }, [loadData]);
 
   // Filtros combinados
   const filteredRequirements = requirements.filter((req) => {

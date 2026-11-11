@@ -107,95 +107,135 @@ export default function BacklogPage() {
     progress: 20,
   });
 
-  const [stories, setStories] = useState([
-    {
-      id: "6",
-      code: "US-06",
-      title: "Criptografia de dados",
-      priority: "high",
-      status: STORY_STATUSES.BACKLOG,
-      rf_count: 1,
-    },
-    {
-      id: "7",
-      code: "US-07",
-      title: "Exportação de relatórios",
-      priority: "low",
-      status: STORY_STATUSES.BACKLOG,
-      rf_count: 2,
-    },
-    {
-      id: "8",
-      code: "US-08",
-      title: "Experiência responsiva",
-      priority: "medium",
-      status: STORY_STATUSES.BACKLOG,
-      rf_count: 3,
-    },
-    {
-      id: "4",
-      code: "US-04",
-      title: "Histórico de versões",
-      priority: "medium",
-      status: STORY_STATUSES.TODO,
-      rf_count: 2,
-    },
-    {
-      id: "5",
-      code: "US-05",
-      title: "Matriz de rastreabilidade",
-      priority: "high",
-      status: STORY_STATUSES.TODO,
-      rf_count: 3,
-    },
-    {
-      id: "2",
-      code: "US-02",
-      title: "Painel de indicadores",
-      priority: "high",
-      status: STORY_STATUSES.IN_PROGRESS,
-      rf_count: 3,
-    },
-    {
-      id: "3",
-      code: "US-03",
-      title: "Gestão de requisitos (CRUD)",
-      priority: "high",
-      status: STORY_STATUSES.IN_PROGRESS,
-      rf_count: 4,
-    },
-    {
-      id: "1",
-      code: "US-01",
-      title: "Autenticação de usuários",
-      priority: "high",
-      status: STORY_STATUSES.DONE,
-      rf_count: 2,
-    },
-  ]);
+  const [stories, setStories] = useState([]);
 
   useEffect(() => {
     async function loadBacklog() {
+      if (!activeProject?.id) return;
       try {
+        // Buscar sprint ativa do projeto
+        const { data: dbSprint } = await supabase
+          .from("sprints")
+          .select("*")
+          .eq("project_id", activeProject.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (dbSprint) {
+          setSprint({
+            name: dbSprint.name,
+            startDate: dbSprint.start_date || "Não definida",
+            endDate: dbSprint.end_date || "Não definida",
+            progress: dbSprint.status === "completed" ? 100 : 25,
+          });
+        } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
+          setSprint({
+            name: "Sprint 4 — Rastreabilidade & Qualidade",
+            startDate: "01/08/2026",
+            endDate: "15/08/2026",
+            progress: 20,
+          });
+        } else {
+          setSprint({
+            name: "Nenhuma Sprint Cadastrada",
+            startDate: "--",
+            endDate: "--",
+            progress: 0,
+          });
+        }
+
+        // Buscar histórias vinculadas ao projeto ativo
         const { data: dbStories } = await supabase
           .from("user_stories")
-          .select("*, requirement_user_stories(count)");
+          .select("*, requirement_user_stories(count)")
+          .eq("project_id", activeProject.id);
 
         if (dbStories && dbStories.length > 0) {
           setStories(
             dbStories.map((s) => ({
               ...s,
-              rf_count: s.requirement_user_stories?.[0]?.count ?? 1,
+              rf_count: s.requirement_user_stories?.[0]?.count ?? 0,
             }))
           );
+        } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
+          setStories([
+            {
+              id: "6",
+              code: "US-06",
+              title: "Criptografia de dados",
+              priority: "high",
+              status: STORY_STATUSES.BACKLOG,
+              rf_count: 1,
+            },
+            {
+              id: "7",
+              code: "US-07",
+              title: "Exportação de relatórios",
+              priority: "low",
+              status: STORY_STATUSES.BACKLOG,
+              rf_count: 2,
+            },
+            {
+              id: "8",
+              code: "US-08",
+              title: "Experiência responsiva",
+              priority: "medium",
+              status: STORY_STATUSES.BACKLOG,
+              rf_count: 3,
+            },
+            {
+              id: "4",
+              code: "US-04",
+              title: "Histórico de versões",
+              priority: "medium",
+              status: STORY_STATUSES.TODO,
+              rf_count: 2,
+            },
+            {
+              id: "5",
+              code: "US-05",
+              title: "Matriz de rastreabilidade",
+              priority: "high",
+              status: STORY_STATUSES.TODO,
+              rf_count: 3,
+            },
+            {
+              id: "2",
+              code: "US-02",
+              title: "Painel de indicadores",
+              priority: "high",
+              status: STORY_STATUSES.IN_PROGRESS,
+              rf_count: 3,
+            },
+            {
+              id: "3",
+              code: "US-03",
+              title: "Gestão de requisitos (CRUD)",
+              priority: "high",
+              status: STORY_STATUSES.IN_PROGRESS,
+              rf_count: 4,
+            },
+            {
+              id: "1",
+              code: "US-01",
+              title: "Autenticação de usuários",
+              priority: "high",
+              status: STORY_STATUSES.DONE,
+              rf_count: 2,
+            },
+          ]);
+        } else {
+          setStories([]);
         }
       } catch (err) {
         console.warn("Erro ao carregar backlog do Supabase:", err);
+        setStories([]);
       }
     }
 
     loadBacklog();
-  }, [activeProject, supabase]);
+  }, [activeProject?.id, supabase]);
 
   const order = [
     STORY_STATUSES.BACKLOG,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Download, Check, Network, ArrowRight } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { useProject } from "@/components/layout/project-context";
@@ -8,65 +8,124 @@ import { createClient } from "@/lib/supabase/client";
 
 export default function TraceabilityPage() {
   const { activeProject } = useProject();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  const [requirements, setRequirements] = useState([
-    { id: "r1", code: "REQ-001" },
-    { id: "r2", code: "REQ-002" },
-    { id: "r3", code: "REQ-003" },
-    { id: "r4", code: "REQ-004" },
-    { id: "r5", code: "REQ-005" },
-    { id: "r6", code: "REQ-006" },
-    { id: "r7", code: "REQ-007" },
-    { id: "r8", code: "REQ-008" },
-    { id: "r9", code: "REQ-009" },
-    { id: "r10", code: "REQ-010" },
-  ]);
+  const [requirements, setRequirements] = useState([]);
+  const [userStories, setUserStories] = useState([]);
+  const [stakeholders, setStakeholders] = useState([]);
+  const [links, setLinks] = useState({});
 
-  const [userStories, setUserStories] = useState([
-    { id: "us1", code: "US-01" },
-    { id: "us2", code: "US-02" },
-    { id: "us3", code: "US-03" },
-    { id: "us4", code: "US-04" },
-    { id: "us5", code: "US-05" },
-  ]);
+  const loadMatrixData = useCallback(async () => {
+    if (!activeProject?.id) return;
 
-  const [stakeholders, setStakeholders] = useState([
-    { id: "stk1", name: "Ana" },
-    { id: "stk2", name: "Carlos" },
-    { id: "stk3", name: "Beatriz" },
-    { id: "stk4", name: "Diego" },
-  ]);
+    try {
+      // 1. Buscar stakeholders/perfis
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, full_name");
 
-  // Mapa de ligações (reqId -> Set of targetIds)
-  // Baseado exatamente na matriz da imagem:
-  // REQ-001: US-01, Ana
-  // REQ-002: US-02, Carlos
-  // REQ-003: Beatriz
-  // REQ-004: US-03, Ana
-  // REQ-005: US-04, Diego
-  // REQ-006: Beatriz
-  // REQ-007: US-05, Carlos
-  // REQ-008: Diego
-  // REQ-009: Ana
-  // REQ-010: Beatriz
-  const [links, setLinks] = useState({
-    "r1-us1": true,
-    "r1-stk1": true,
-    "r2-us2": true,
-    "r2-stk2": true,
-    "r3-stk3": true,
-    "r4-us3": true,
-    "r4-stk1": true,
-    "r5-us4": true,
-    "r5-stk4": true,
-    "r6-stk3": true,
-    "r7-us5": true,
-    "r7-stk2": true,
-    "r8-stk4": true,
-    "r9-stk1": true,
-    "r10-stk3": true,
-  });
+      if (profilesData && profilesData.length > 0) {
+        setStakeholders(
+          profilesData.map((p) => ({
+            id: p.id,
+            name: p.full_name?.split(" ")[0] || "Membro",
+          }))
+        );
+      } else {
+        setStakeholders([
+          { id: "stk1", name: "Ana" },
+          { id: "stk2", name: "Carlos" },
+          { id: "stk3", name: "Beatriz" },
+          { id: "stk4", name: "Diego" },
+        ]);
+      }
+
+      // 2. Buscar Requisitos vinculados ao projeto ativo
+      const { data: linkedReqs } = await supabase
+        .from("project_requirements")
+        .select("requirement:requirements(id, code)")
+        .eq("project_id", activeProject.id);
+
+      const reqList = (linkedReqs || [])
+        .map((l) => l.requirement)
+        .filter(Boolean)
+        .sort((a, b) => a.code.localeCompare(b.code));
+
+      // 3. Buscar User Stories vinculadas ao projeto ativo
+      const { data: storiesData } = await supabase
+        .from("user_stories")
+        .select("id, code")
+        .eq("project_id", activeProject.id)
+        .order("code", { ascending: true });
+
+      if (reqList.length > 0) {
+        setRequirements(reqList);
+        setUserStories(storiesData || []);
+        // Buscar vínculos reais de requirement_user_stories
+        const reqIds = reqList.map((r) => r.id);
+        const { data: linkData } = await supabase
+          .from("requirement_user_stories")
+          .select("requirement_id, user_story_id")
+          .in("requirement_id", reqIds);
+
+        const newLinks = {};
+        (linkData || []).forEach((item) => {
+          newLinks[`${item.requirement_id}-${item.user_story_id}`] = true;
+        });
+        setLinks(newLinks);
+      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
+        // Fallback demo apenas para o projeto mock
+        setRequirements([
+          { id: "r1", code: "REQ-001" },
+          { id: "r2", code: "REQ-002" },
+          { id: "r3", code: "REQ-003" },
+          { id: "r4", code: "REQ-004" },
+          { id: "r5", code: "REQ-005" },
+          { id: "r6", code: "REQ-006" },
+          { id: "r7", code: "REQ-007" },
+          { id: "r8", code: "REQ-008" },
+          { id: "r9", code: "REQ-009" },
+          { id: "r10", code: "REQ-010" },
+        ]);
+        setUserStories([
+          { id: "us1", code: "US-01" },
+          { id: "us2", code: "US-02" },
+          { id: "us3", code: "US-03" },
+          { id: "us4", code: "US-04" },
+          { id: "us5", code: "US-05" },
+        ]);
+        setLinks({
+          "r1-us1": true,
+          "r1-stk1": true,
+          "r2-us2": true,
+          "r2-stk2": true,
+          "r3-stk3": true,
+          "r4-us3": true,
+          "r4-stk1": true,
+          "r5-us4": true,
+          "r5-stk4": true,
+          "r6-stk3": true,
+          "r7-us5": true,
+          "r7-stk2": true,
+          "r8-stk4": true,
+          "r9-stk1": true,
+          "r10-stk3": true,
+        });
+      } else {
+        setRequirements([]);
+        setUserStories([]);
+        setLinks({});
+      }
+    } catch (err) {
+      console.warn("Erro ao buscar dados da matriz:", err);
+      setRequirements([]);
+      setUserStories([]);
+    }
+  }, [activeProject?.id, supabase]);
+
+  useEffect(() => {
+    loadMatrixData();
+  }, [loadMatrixData]);
 
   const toggleLink = (reqId, targetId) => {
     const key = `${reqId}-${targetId}`;
@@ -141,8 +200,15 @@ export default function TraceabilityPage() {
           </div>
 
           {/* Grid da Matriz */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-center border-collapse">
+          {requirements.length === 0 ? (
+            <div className="py-16 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-2">
+              <Network className="w-8 h-8 text-slate-300 stroke-1" />
+              <p className="font-semibold text-slate-600">Nenhum requisito cadastrado neste projeto ainda.</p>
+              <p className="text-slate-400">Cadastre requisitos e vincule-os a user stories para visualizar a matriz cruzada.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-center border-collapse">
               <thead>
                 {/* Super Header */}
                 <tr className="border-b border-slate-200 text-xs font-bold text-blue-600 bg-slate-50/50">
@@ -257,6 +323,7 @@ export default function TraceabilityPage() {
               </tbody>
             </table>
           </div>
+          )}
         </div>
 
         {/* Legenda Card */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   FileText,
   Download,
@@ -13,10 +13,31 @@ import {
 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { useProject } from "@/components/layout/project-context";
+import { createClient } from "@/lib/supabase/client";
 
 export default function ReportsPage() {
   const { activeProject } = useProject();
   const [activeTab, setActiveTab] = useState("srs"); // 'srs' ou 'metricas'
+  const [requirements, setRequirements] = useState([]);
+  const supabase = useMemo(() => createClient(), []);
+
+  useEffect(() => {
+    async function loadReportData() {
+      if (!activeProject?.id) return;
+      try {
+        const { data: linked } = await supabase
+          .from("project_requirements")
+          .select("requirement:requirements(*)")
+          .eq("project_id", activeProject.id);
+
+        const list = (linked || []).map((l) => l.requirement).filter(Boolean);
+        setRequirements(list);
+      } catch (err) {
+        console.warn("Erro ao carregar requisitos do relatório:", err);
+      }
+    }
+    loadReportData();
+  }, [activeProject?.id, supabase]);
 
   const projectName = activeProject?.name || "Sistema de Gestão Acadêmica";
 
@@ -139,77 +160,62 @@ export default function ReportsPage() {
                 2. Requisitos Funcionais (RF)
               </h2>
               <div className="divide-y divide-slate-100 text-xs">
-                <div className="py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-blue-700">[RF001] Autenticação de Usuários</span>
-                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded">
-                      Aprovado • Alta
-                    </span>
-                  </div>
-                  <p className="text-slate-700">
-                    O sistema deve permitir que usuários realizem login com e-mail e senha.
-                  </p>
-                  <p className="text-slate-500">
-                    <strong>Critério de Aceitação:</strong> O usuário deve conseguir autenticar com e-mail válido e senha criptografada em até 2 segundos.
-                  </p>
-                </div>
+                {requirements.filter((r) => r.type === "RF").length > 0 ? (
+                  requirements
+                    .filter((r) => r.type === "RF")
+                    .map((rf) => (
+                      <div key={rf.id} className="py-3 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-blue-700">[{rf.code}] {rf.title || rf.description.slice(0, 40)}</span>
+                          <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded capitalize">
+                            {rf.status} • {rf.priority}
+                          </span>
+                        </div>
+                        <p className="text-slate-700">{rf.description}</p>
+                        {rf.acceptance_criteria && (
+                          <p className="text-slate-500">
+                            <strong>Critério de Aceitação:</strong> {rf.acceptance_criteria}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                ) : activeProject?.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" ? (
+                  <>
+                    <div className="py-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-blue-700">[RF001] Autenticação de Usuários</span>
+                        <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded">
+                          Aprovado • Alta
+                        </span>
+                      </div>
+                      <p className="text-slate-700">
+                        O sistema deve permitir que usuários realizem login com e-mail e senha.
+                      </p>
+                      <p className="text-slate-500">
+                        <strong>Critério de Aceitação:</strong> O usuário deve conseguir autenticar com e-mail válido e senha criptografada em até 2 segundos.
+                      </p>
+                    </div>
 
-                <div className="py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-blue-700">[RF002] Painel de Indicadores</span>
-                    <span className="text-[10px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded">
-                      Em Desenvolvimento • Alta
-                    </span>
-                  </div>
-                  <p className="text-slate-700">
-                    O sistema deve exibir um painel com indicadores de status dos requisitos.
+                    <div className="py-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-blue-700">[RF002] Painel de Indicadores</span>
+                        <span className="text-[10px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded">
+                          Em Desenvolvimento • Alta
+                        </span>
+                      </div>
+                      <p className="text-slate-700">
+                        O sistema deve exibir um painel com indicadores de status dos requisitos.
+                      </p>
+                      <p className="text-slate-500">
+                        <strong>Critério de Aceitação:</strong> O dashboard deve exibir métricas de Total, Pendentes, Aprovados e Em Desenvolvimento com gráfico.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="py-4 text-slate-400 italic">
+                    Nenhum requisito funcional cadastrado neste projeto ainda.
                   </p>
-                  <p className="text-slate-500">
-                    <strong>Critério de Aceitação:</strong> O dashboard deve exibir métricas de Total, Pendentes, Aprovados e Em Desenvolvimento com gráfico.
-                  </p>
-                </div>
-
-                <div className="py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-blue-700">[RF004] Gestão de Requisitos</span>
-                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded">
-                      Aprovado • Alta
-                    </span>
-                  </div>
-                  <p className="text-slate-700">
-                    O sistema deve permitir cadastrar, editar e excluir requisitos mantendo integridade.
-                  </p>
-                  <p className="text-slate-500">
-                    <strong>Critério de Aceitação:</strong> Deve permitir preenchimento completo de descrição, justificativa, critérios e fonte.
-                  </p>
-                </div>
-
-                <div className="py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-blue-700">[RF005] Histórico de Versões</span>
-                    <span className="text-[10px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded">
-                      Em Desenvolvimento • Média
-                    </span>
-                  </div>
-                  <p className="text-slate-700">
-                    O sistema deve manter histórico de versões de cada requisito.
-                  </p>
-                  <p className="text-slate-500">
-                    <strong>Critério de Aceitação:</strong> Cada modificação gera snapshot com autor, data/hora e resumo da alteração.
-                  </p>
-                </div>
-
-                <div className="py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-blue-700">[RF007] Matriz de Rastreabilidade</span>
-                    <span className="text-[10px] bg-amber-50 text-amber-700 font-semibold px-2 py-0.5 rounded">
-                      Pendente • Alta
-                    </span>
-                  </div>
-                  <p className="text-slate-700">
-                    O sistema deve gerar a matriz de rastreabilidade entre requisitos e user stories.
-                  </p>
-                </div>
+                )}
               </div>
             </section>
 
@@ -219,41 +225,56 @@ export default function ReportsPage() {
                 3. Requisitos Não-Funcionais (RNF)
               </h2>
               <div className="divide-y divide-slate-100 text-xs">
-                <div className="py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-indigo-700">[RNF003] Desempenho e Latência</span>
-                    <span className="text-[10px] bg-amber-50 text-amber-700 font-semibold px-2 py-0.5 rounded">
-                      Pendente • Média
-                    </span>
-                  </div>
-                  <p className="text-slate-700">
-                    O tempo de resposta das páginas não deve exceder 2 segundos sob carga normal.
-                  </p>
-                </div>
+                {requirements.filter((r) => r.type === "RNF").length > 0 ? (
+                  requirements
+                    .filter((r) => r.type === "RNF")
+                    .map((rnf) => (
+                      <div key={rnf.id} className="py-3 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-indigo-700">[{rnf.code}] {rnf.title || rnf.description.slice(0, 40)}</span>
+                          <span className="text-[10px] bg-amber-50 text-amber-700 font-semibold px-2 py-0.5 rounded capitalize">
+                            {rnf.status} • {rnf.priority}
+                          </span>
+                        </div>
+                        <p className="text-slate-700">{rnf.description}</p>
+                        {rnf.acceptance_criteria && (
+                          <p className="text-slate-500">
+                            <strong>Critério de Aceitação:</strong> {rnf.acceptance_criteria}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                ) : activeProject?.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" ? (
+                  <>
+                    <div className="py-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-indigo-700">[RNF003] Desempenho e Latência</span>
+                        <span className="text-[10px] bg-amber-50 text-amber-700 font-semibold px-2 py-0.5 rounded">
+                          Pendente • Média
+                        </span>
+                      </div>
+                      <p className="text-slate-700">
+                        O tempo de resposta das páginas não deve exceder 2 segundos sob carga normal.
+                      </p>
+                    </div>
 
-                <div className="py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-indigo-700">[RNF006] Acessibilidade Web</span>
-                    <span className="text-[10px] bg-amber-50 text-amber-700 font-semibold px-2 py-0.5 rounded">
-                      Pendente • Média
-                    </span>
-                  </div>
-                  <p className="text-slate-700">
-                    A aplicação deve ser acessível conforme diretrizes WCAG 2.1 AA (contraste e teclado).
+                    <div className="py-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-indigo-700">[RNF008] Segurança e Criptografia</span>
+                        <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded">
+                          Aprovado • Alta
+                        </span>
+                      </div>
+                      <p className="text-slate-700">
+                        Os dados sensíveis devem ser protegidos com criptografia AES-256 e TLS 1.3.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="py-4 text-slate-400 italic">
+                    Nenhum requisito não-funcional cadastrado neste projeto ainda.
                   </p>
-                </div>
-
-                <div className="py-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-indigo-700">[RNF008] Segurança e Criptografia</span>
-                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded">
-                      Aprovado • Alta
-                    </span>
-                  </div>
-                  <p className="text-slate-700">
-                    Os dados sensíveis devem ser protegidos com criptografia AES-256 e TLS 1.3.
-                  </p>
-                </div>
+                )}
               </div>
             </section>
 
