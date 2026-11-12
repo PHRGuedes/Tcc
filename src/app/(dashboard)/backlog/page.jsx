@@ -8,6 +8,8 @@ import {
   Plus,
   ArrowRight,
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   ChevronRight,
   ChevronDown,
   X,
@@ -695,6 +697,10 @@ function ArchivedSprintsModal({
 
 function SprintBlock({
   sprint,
+  index = 0,
+  isFirst = false,
+  isLast = false,
+  onMoveOrder,
   stories = [],
   allActiveSprints = [],
   isCollapsed,
@@ -777,6 +783,34 @@ function SprintBlock({
             </div>
 
             <div className="flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-3">
+              {/* Botões para Reordenar Sprints */}
+              <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5 border border-slate-200/60 dark:border-slate-700/60" title="Alterar ordem da sprint">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveOrder(sprint.id, -1);
+                  }}
+                  disabled={isFirst}
+                  className="p-1 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 disabled:opacity-20 rounded hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="Mover sprint para cima"
+                >
+                  <ArrowUp className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveOrder(sprint.id, 1);
+                  }}
+                  disabled={isLast}
+                  className="p-1 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 disabled:opacity-20 rounded hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                  title="Mover sprint para baixo"
+                >
+                  <ArrowDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
               <button
                 onClick={() => onToggleCollapse(sprint.id)}
                 className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors cursor-pointer"
@@ -870,8 +904,30 @@ function SprintBlock({
             </div>
           </div>
 
-          {/* Ações da Sprint: Resumir, Arquivar, Excluir */}
+          {/* Ações da Sprint: Reordenar, Resumir, Arquivar, Excluir */}
           <div className="flex items-center gap-2 border-l border-slate-200 dark:border-slate-800 pl-3">
+            {/* Botões para Reordenar Sprints */}
+            <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200/60 dark:border-slate-700/60" title="Alterar ordem da sprint">
+              <button
+                type="button"
+                onClick={() => onMoveOrder(sprint.id, -1)}
+                disabled={isFirst}
+                className="p-1 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 disabled:opacity-20 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                title="Mover sprint para cima"
+              >
+                <ArrowUp className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onMoveOrder(sprint.id, 1)}
+                disabled={isLast}
+                className="p-1 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 disabled:opacity-20 rounded-lg hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                title="Mover sprint para baixo"
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
             <button
               onClick={() => onToggleCollapse(sprint.id)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
@@ -963,27 +1019,48 @@ export default function BacklogPage() {
           .eq("project_id", activeProject.id)
           .order("created_at", { ascending: false });
 
+        // Ordenador auxiliar baseado na preferência salva no localStorage
+        const sortWithSavedOrder = (list) => {
+          if (!activeProject?.id || typeof window === "undefined") return list;
+          try {
+            const saved = JSON.parse(
+              localStorage.getItem(`reqflow_sprint_order_${activeProject.id}`) || "[]"
+            );
+            if (Array.isArray(saved) && saved.length > 0) {
+              const map = new Map(saved.map((id, idx) => [id, idx]));
+              return [...list].sort((a, b) => {
+                const idxA = map.has(a.id) ? map.get(a.id) : 999;
+                const idxB = map.has(b.id) ? map.get(b.id) : 999;
+                return idxA - idxB;
+              });
+            }
+          } catch {}
+          return list;
+        };
+
         if (dbSprints && dbSprints.length > 0) {
-          setSprints(dbSprints);
+          setSprints(sortWithSavedOrder(dbSprints));
         } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
-          setSprints([
-            {
-              id: "sprint-demo-2",
-              name: "Sprint 2 — Rastreabilidade & Validação",
-              goal: "Finalizar matriz de rastreabilidade e histórico de versões",
-              start_date: "2026-11-01",
-              end_date: "2026-11-15",
-              status: "active",
-            },
-            {
-              id: "sprint-demo-1",
-              name: "Sprint 1 — MVP Inicial",
-              goal: "Modelagem inicial de requisitos e autenticação",
-              start_date: "2026-10-15",
-              end_date: "2026-10-31",
-              status: "completed",
-            },
-          ]);
+          setSprints(
+            sortWithSavedOrder([
+              {
+                id: "sprint-demo-2",
+                name: "Sprint 2 — Rastreabilidade & Validação",
+                goal: "Finalizar matriz de rastreabilidade e histórico de versões",
+                start_date: "2026-11-01",
+                end_date: "2026-11-15",
+                status: "active",
+              },
+              {
+                id: "sprint-demo-1",
+                name: "Sprint 1 — MVP Inicial",
+                goal: "Modelagem inicial de requisitos e autenticação",
+                start_date: "2026-10-15",
+                end_date: "2026-10-31",
+                status: "completed",
+              },
+            ])
+          );
         } else {
           setSprints([]);
         }
@@ -1103,6 +1180,38 @@ export default function BacklogPage() {
       updated[s.id] = collapseAll;
     });
     setCollapsedSprints(updated);
+  };
+
+  // Alterar a ordem das sprints ativas (Subir / Descer)
+  const handleMoveSprintOrder = (sprintId, direction) => {
+    setSprints((prev) => {
+      const active = prev.filter((s) => s.status !== "completed");
+      const archived = prev.filter((s) => s.status === "completed");
+
+      const currentIndex = active.findIndex((s) => s.id === sprintId);
+      if (currentIndex < 0) return prev;
+
+      const targetIndex = currentIndex + direction;
+      if (targetIndex < 0 || targetIndex >= active.length) return prev;
+
+      const reorderedActive = [...active];
+      const [moved] = reorderedActive.splice(currentIndex, 1);
+      reorderedActive.splice(targetIndex, 0, moved);
+
+      // Salvar preferência de ordenação no localStorage
+      if (activeProject?.id && typeof window !== "undefined") {
+        try {
+          localStorage.setItem(
+            `reqflow_sprint_order_${activeProject.id}`,
+            JSON.stringify(reorderedActive.map((s) => s.id))
+          );
+        } catch (e) {
+          console.warn("Aviso ao salvar ordem das sprints:", e);
+        }
+      }
+
+      return [...reorderedActive, ...archived];
+    });
   };
 
   // Mover status de história dentro da sprint (A Fazer <-> Em Progresso <-> Concluído)
@@ -1490,10 +1599,14 @@ export default function BacklogPage() {
 
         {/* 2. LISTA DE SPRINTS ATIVAS (UMA EMBAIXO DA OUTRA) */}
         <div className="space-y-6">
-          {activeSprints.map((sprint) => (
+          {activeSprints.map((sprint, index) => (
             <SprintBlock
               key={sprint.id}
               sprint={sprint}
+              index={index}
+              isFirst={index === 0}
+              isLast={index === activeSprints.length - 1}
+              onMoveOrder={handleMoveSprintOrder}
               stories={stories}
               allActiveSprints={activeSprints}
               isCollapsed={collapsedSprints[sprint.id] ?? false}
