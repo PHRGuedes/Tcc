@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Search, Plus, Eye, Pencil, AlertTriangle, Link2 } from "lucide-react";
+import { Search, Plus, Eye, Pencil, AlertTriangle } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { TypeBadge, PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { RequirementModal } from "@/components/modules/requirements/requirement-modal";
@@ -111,7 +111,6 @@ export default function RequirementsPage() {
           }))
         );
       } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
-        // Fallback apenas para o projeto demo do seed caso o banco não esteja populado
         setRequirements([
           {
             id: "1",
@@ -195,7 +194,6 @@ export default function RequirementsPage() {
           },
         ]);
       } else {
-        // Projeto novo vazio
         setRequirements([]);
       }
     } catch (err) {
@@ -248,19 +246,19 @@ export default function RequirementsPage() {
     <>
       <Topbar title="Requisitos" />
 
-      <div className="p-8 max-w-7xl w-full mx-auto">
+      <div className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
         {/* Filter & Action Bar Card */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs mb-6">
+        <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
             {/* Search Input */}
             <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar por ID ou descrição..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Buscar por código ou descrição do requisito..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               />
             </div>
 
@@ -268,7 +266,7 @@ export default function RequirementsPage() {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleOpenCreateModal}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-xl text-sm flex items-center gap-2 shadow-xs transition-colors cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 <span>Novo Requisito</span>
@@ -277,15 +275,15 @@ export default function RequirementsPage() {
           </div>
 
           {/* Dropdown Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-slate-100">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-200/80 dark:border-slate-800">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
                 Tipo
               </label>
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 bg-slate-50/80 dark:bg-slate-950 font-medium focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
               >
                 <option value="all">Todos os tipos</option>
                 <option value={REQUIREMENT_TYPES.RF}>RF — Requisito Funcional</option>
@@ -294,15 +292,15 @@ export default function RequirementsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
                 Prioridade
               </label>
               <select
                 value={filterPriority}
                 onChange={(e) => setFilterPriority(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 bg-slate-50/80 dark:bg-slate-950 font-medium focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
               >
-                <option value="all">Todas</option>
+                <option value="all">Todas as prioridades</option>
                 {Object.entries(PRIORITY_LABELS).map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
@@ -312,15 +310,15 @@ export default function RequirementsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">
+              <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
                 Status
               </label>
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 bg-slate-50/80 dark:bg-slate-950 font-medium focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
               >
-                <option value="all">Todos</option>
+                <option value="all">Todos os status</option>
                 {Object.entries(REQUIREMENT_STATUS_LABELS).map(([k, v]) => (
                   <option key={k} value={k}>
                     {v}
@@ -332,30 +330,30 @@ export default function RequirementsPage() {
         </div>
 
         {/* Requirements Table Card */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 text-[11px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50/50">
-                  <th className="py-3.5 px-6">ID</th>
-                  <th className="py-3.5 px-6">Descrição</th>
-                  <th className="py-3.5 px-6">Tipo</th>
-                  <th className="py-3.5 px-6">Prioridade</th>
-                  <th className="py-3.5 px-6">Status</th>
-                  <th className="py-3.5 px-6">Responsável</th>
-                  <th className="py-3.5 px-6 text-right">Ações</th>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-slate-100/70 dark:bg-[#131c31]">
+                  <th className="py-4 px-6 w-28">ID</th>
+                  <th className="py-4 px-6">Descrição</th>
+                  <th className="py-4 px-6 w-24">Tipo</th>
+                  <th className="py-4 px-6 w-32">Prioridade</th>
+                  <th className="py-4 px-6 w-36">Status</th>
+                  <th className="py-4 px-6 w-44">Responsável</th>
+                  <th className="py-4 px-6 text-right w-24">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-xs font-medium">
+              <tbody className="divide-y divide-slate-200/80 dark:divide-slate-800 text-xs font-medium">
                 {filteredRequirements.map((req) => (
                   <tr
                     key={req.id}
-                    className="hover:bg-slate-50/60 transition-colors"
+                    className="hover:bg-blue-50/40 dark:hover:bg-slate-800/40 transition-colors"
                   >
-                    <td className="py-4 px-6 font-semibold text-slate-900 whitespace-nowrap">
+                    <td className="py-4 px-6 font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap font-mono text-xs">
                       {req.code}
                     </td>
-                    <td className="py-4 px-6 text-slate-700 max-w-md">
+                    <td className="py-4 px-6 text-slate-800 dark:text-slate-200 max-w-md">
                       <div className="flex items-center gap-2">
                         {req.is_incomplete && (
                           <span
@@ -377,22 +375,22 @@ export default function RequirementsPage() {
                     <td className="py-4 px-6 whitespace-nowrap">
                       <StatusBadge status={req.status} />
                     </td>
-                    <td className="py-4 px-6 text-slate-600 whitespace-nowrap">
+                    <td className="py-4 px-6 text-slate-600 dark:text-slate-400 whitespace-nowrap font-medium">
                       {req.responsible_name}
                     </td>
                     <td className="py-4 px-6 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1 text-slate-400">
+                      <div className="flex items-center justify-end gap-1 text-slate-400 dark:text-slate-500">
                         <button
                           onClick={() => handleOpenEditModal(req)}
                           title="Visualizar Detalhes"
-                          className="p-1.5 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="p-1.5 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleOpenEditModal(req)}
                           title="Editar e Versionar"
-                          className="p-1.5 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-1.5 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-colors cursor-pointer"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -405,7 +403,7 @@ export default function RequirementsPage() {
           </div>
 
           {filteredRequirements.length === 0 && (
-            <div className="py-12 text-center text-slate-400 text-xs">
+            <div className="py-14 text-center text-slate-500 dark:text-slate-400 text-xs">
               Nenhum requisito encontrado para os filtros selecionados.
             </div>
           )}

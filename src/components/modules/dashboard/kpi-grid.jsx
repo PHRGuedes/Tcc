@@ -9,36 +9,36 @@ export function KpiGrid({ stats }) {
       title: "Total de Requisitos",
       value: stats?.total ?? 44,
       icon: FileText,
-      iconColor: "text-slate-600",
-      iconBg: "bg-slate-100",
+      iconColor: "text-slate-700 dark:text-slate-300",
+      iconBg: "bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700",
     },
     {
       title: "Pendentes",
       value: stats?.pending ?? 8,
       icon: Clock,
-      iconColor: "text-amber-600",
-      iconBg: "bg-amber-50",
+      iconColor: "text-amber-600 dark:text-amber-400",
+      iconBg: "bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50",
     },
     {
       title: "Aprovados",
       value: stats?.approved ?? 21,
       icon: CheckCircle2,
-      iconColor: "text-emerald-600",
-      iconBg: "bg-emerald-50",
+      iconColor: "text-emerald-600 dark:text-emerald-400",
+      iconBg: "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50",
     },
     {
       title: "Em Desenvolvimento",
       value: stats?.inDevelopment ?? 10,
       icon: Code2,
-      iconColor: "text-blue-600",
-      iconBg: "bg-blue-50",
+      iconColor: "text-blue-600 dark:text-blue-400",
+      iconBg: "bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50",
     },
     {
       title: "Implementados",
       value: stats?.implemented ?? 5,
       icon: Rocket,
-      iconColor: "text-indigo-600",
-      iconBg: "bg-indigo-50",
+      iconColor: "text-indigo-600 dark:text-indigo-400",
+      iconBg: "bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50",
     },
   ];
 
@@ -49,7 +49,7 @@ export function KpiGrid({ stats }) {
         return (
           <div
             key={index}
-            className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between"
+            className="bg-white dark:bg-[#0f172a] rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between transition-colors"
           >
             <div className="flex items-center justify-between mb-3">
               <div
@@ -63,10 +63,12 @@ export function KpiGrid({ stats }) {
               </div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-slate-900 tracking-tight leading-none mb-1">
+              <div className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight leading-none mb-1">
                 {kpi.value}
               </div>
-              <div className="text-xs font-medium text-slate-500">{kpi.title}</div>
+              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                {kpi.title}
+              </div>
             </div>
           </div>
         );

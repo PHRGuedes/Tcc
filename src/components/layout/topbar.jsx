@@ -1,9 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, ChevronDown, FolderKanban, Plus, Loader2, Settings } from "lucide-react";
+import {
+  Bell,
+  ChevronDown,
+  FolderKanban,
+  Plus,
+  Loader2,
+  Settings,
+  Sun,
+  Moon,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useProject } from "@/components/layout/project-context";
+import { useTheme } from "@/components/layout/theme-provider";
 import { getInitials } from "@/lib/utils/formatters";
 import { ROLE_LABELS } from "@/lib/constants/roles";
 import { ManageProjectModal } from "@/components/modules/projects/manage-project-modal";
@@ -11,6 +21,8 @@ import { ManageProjectModal } from "@/components/modules/projects/manage-project
 export function Topbar({ title = "Dashboard" }) {
   const { profile, loading } = useAuth();
   const { activeProject, projects, setActiveProject, createProject } = useProject();
+  const { theme, toggleTheme } = useTheme();
+
   const [showProjectMenu, setShowProjectMenu] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
@@ -20,7 +32,11 @@ export function Topbar({ title = "Dashboard" }) {
   const [createError, setCreateError] = useState("");
 
   const userInitials = profile?.full_name ? getInitials(profile.full_name) : "--";
-  const roleLabel = profile?.role ? (ROLE_LABELS[profile.role] || profile.role) : (loading ? "Carregando..." : "");
+  const roleLabel = profile?.role
+    ? ROLE_LABELS[profile.role] || profile.role
+    : loading
+    ? "Carregando..."
+    : "";
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
@@ -48,26 +64,31 @@ export function Topbar({ title = "Dashboard" }) {
   };
 
   return (
-    <header className="h-20 bg-white border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-30">
+    <header className="h-20 bg-white/95 dark:bg-[#0c1427]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-8 flex items-center justify-between sticky top-0 z-30 transition-colors">
       {/* Title and Active Project Context */}
       <div>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight">
           {title}
         </h2>
         <div className="flex items-center gap-2 mt-0.5">
           <div className="relative inline-block">
             <button
               onClick={() => setShowProjectMenu(!showProjectMenu)}
-              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors font-medium py-0.5"
+              className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors font-medium py-0.5 cursor-pointer"
             >
-              <span>Projeto: <strong className="text-slate-700 font-semibold">{activeProject?.name || "Sistema de Gestão Acadêmica"}</strong></span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              <span>
+                Projeto:{" "}
+                <strong className="text-slate-800 dark:text-slate-200 font-semibold">
+                  {activeProject?.name || "Sistema de Gestão Acadêmica"}
+                </strong>
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
             </button>
 
             {/* Project Switcher Dropdown */}
             {showProjectMenu && (
-              <div className="absolute left-0 mt-1.5 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-2 z-50 animate-in fade-in slide-in-from-top-1">
-                <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              <div className="absolute left-0 mt-1.5 w-72 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-2 z-50 animate-in fade-in slide-in-from-top-1">
+                <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                   Alternar Projeto
                 </div>
                 <div className="space-y-0.5 max-h-48 overflow-y-auto">
@@ -78,26 +99,26 @@ export function Topbar({ title = "Dashboard" }) {
                         setActiveProject(proj);
                         setShowProjectMenu(false);
                       }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${
+                      className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors cursor-pointer ${
                         activeProject?.id === proj.id
-                          ? "bg-blue-50 text-blue-700 font-semibold"
-                          : "text-slate-700 hover:bg-slate-50"
+                          ? "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 font-semibold"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/70"
                       }`}
                     >
-                      <FolderKanban className="w-4 h-4 text-slate-400" />
+                      <FolderKanban className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                       <span className="truncate">{proj.name}</span>
                     </button>
                   ))}
                 </div>
-                <div className="border-t border-slate-100 mt-2 pt-2 space-y-1">
+                <div className="border-t border-slate-100 dark:border-slate-800 mt-2 pt-2 space-y-1">
                   <button
                     onClick={() => {
                       setShowManageModal(true);
                       setShowProjectMenu(false);
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                   >
-                    <Settings className="w-4 h-4 text-slate-500" />
+                    <Settings className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                     <span>Gerenciar Projeto Atual</span>
                   </button>
                   <button
@@ -105,7 +126,7 @@ export function Topbar({ title = "Dashboard" }) {
                       setShowNewProjectModal(true);
                       setShowProjectMenu(false);
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors cursor-pointer"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Cadastrar Novo Projeto</span>
@@ -118,61 +139,79 @@ export function Topbar({ title = "Dashboard" }) {
           {/* Botão de Acesso Rápido para Gerenciar Projeto */}
           <button
             onClick={() => setShowManageModal(true)}
-            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition-all shadow-2xs cursor-pointer"
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 hover:bg-blue-50 dark:bg-slate-800/80 dark:hover:bg-blue-950/40 border border-slate-200 hover:border-blue-200 dark:border-slate-700 dark:hover:border-blue-800 rounded-lg transition-all shadow-2xs cursor-pointer"
             title="Gerenciar Projeto (alterar nome, descrição e stakeholders)"
           >
-            <Settings className="w-3.5 h-3.5 text-slate-500" />
+            <Settings className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
             <span>Gerenciar</span>
           </button>
         </div>
       </div>
 
-      {/* Right Controls: Notifications & User Profile */}
-      <div className="flex items-center gap-5">
+      {/* Right Controls: Theme Toggle, Notifications & User Profile */}
+      <div className="flex items-center gap-3 sm:gap-4">
+        {/* Dark Mode Toggle Button */}
+        <button
+          onClick={toggleTheme}
+          title={theme === "dark" ? "Mudar para Modo Claro" : "Mudar para Modo Escuro"}
+          className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/70 dark:hover:bg-slate-800 text-slate-600 dark:text-amber-400 shadow-2xs transition-all cursor-pointer"
+          aria-label="Alternar tema"
+        >
+          {theme === "dark" ? (
+            <Sun className="w-4 h-4 transition-transform duration-200 rotate-0 hover:rotate-45" />
+          ) : (
+            <Moon className="w-4 h-4 text-slate-600 hover:text-blue-600 transition-transform duration-200" />
+          )}
+        </button>
+
         {/* Notifications Icon with dot */}
         <button
           title="Notificações"
-          className="relative p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+          className="relative p-2.5 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer"
         >
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white" />
+          <Bell className="w-4 h-4" />
+          <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-900" />
         </button>
 
+        {/* Divider */}
+        <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+
         {/* User Card */}
-        <div className="flex items-center gap-3 pl-2">
-          <div className="w-10 h-10 rounded-full bg-[#13233f] text-white flex items-center justify-center font-bold text-sm tracking-wider shadow-sm">
+        <div className="flex items-center gap-3 pl-1">
+          <div className="w-9 h-9 rounded-xl bg-[#112240] dark:bg-blue-600 text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-sm">
             {userInitials}
           </div>
-          <div className="flex flex-col text-left">
-            <span className="text-sm font-semibold text-slate-800 leading-tight">
+          <div className="hidden md:flex flex-col text-left">
+            <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-tight">
               {profile?.full_name || (loading ? "Carregando..." : "Não autenticado")}
             </span>
-            <span className="text-xs text-slate-500 font-normal">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
               {roleLabel}
             </span>
           </div>
-          <ChevronDown className="w-4 h-4 text-slate-400" />
         </div>
       </div>
 
       {/* Modal Criar Novo Projeto */}
       {showNewProjectModal && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200">
-            <h3 className="text-lg font-bold text-slate-900 mb-1">Cadastrar Novo Projeto</h3>
-            <p className="text-xs text-slate-500 mb-4">
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#0f172a] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">
+              Cadastrar Novo Projeto
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
               Crie um novo projeto para organizar e vincular seus requisitos e sprints.
             </p>
 
             {createError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs font-medium">
                 {createError}
               </div>
             )}
 
             <form onSubmit={handleCreateProject} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Nome do Projeto <span className="text-rose-500">*</span>
                 </label>
                 <input
@@ -182,12 +221,12 @@ export function Topbar({ title = "Dashboard" }) {
                   placeholder="Ex: Plataforma E-commerce B2B"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-50 disabled:opacity-70"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-70"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   Descrição do Projeto
                 </label>
                 <textarea
@@ -196,7 +235,7 @@ export function Topbar({ title = "Dashboard" }) {
                   placeholder="Descreva o objetivo ou escopo geral deste projeto..."
                   value={newProjectDesc}
                   onChange={(e) => setNewProjectDesc(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none disabled:bg-slate-50 disabled:opacity-70"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:opacity-70"
                 />
               </div>
 
@@ -208,14 +247,14 @@ export function Topbar({ title = "Dashboard" }) {
                     setShowNewProjectModal(false);
                     setCreateError("");
                   }}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-70 cursor-pointer"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-70 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
@@ -232,7 +271,7 @@ export function Topbar({ title = "Dashboard" }) {
         </div>
       )}
 
-      {/* Modal Gerenciar Projeto (Dados Gerais & Stakeholders) */}
+      {/* Modal Gerenciar Projeto */}
       <ManageProjectModal
         key={activeProject?.id || "manage-modal"}
         isOpen={showManageModal}
