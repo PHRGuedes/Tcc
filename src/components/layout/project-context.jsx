@@ -9,7 +9,7 @@ import {
   useMemo,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { createProjectAction } from "@/app/actions/projects";
+import { createProjectAction, updateProjectAction } from "@/app/actions/projects";
 
 const STORAGE_KEY = "reqflow_active_project_id";
 
@@ -20,6 +20,7 @@ const ProjectContext = createContext({
   setActiveProject: () => {},
   refreshProjects: () => {},
   createProject: async () => {},
+  updateProject: async () => {},
 });
 
 export function ProjectProvider({ children }) {
@@ -78,7 +79,13 @@ export function ProjectProvider({ children }) {
   }, [supabase]);
 
   useEffect(() => {
-    fetchProjects();
+    let ignore = false;
+    Promise.resolve().then(() => {
+      if (!ignore) fetchProjects();
+    });
+    return () => {
+      ignore = true;
+    };
   }, [fetchProjects]);
 
   // Função para criar novo projeto persistindo no Supabase via Server Action
@@ -101,6 +108,33 @@ export function ProjectProvider({ children }) {
     return newProject;
   };
 
+  // Função para atualizar projeto persistindo no Supabase via Server Action
+  const updateProject = async ({ id, name, description }) => {
+    const result = await updateProjectAction({
+      projectId: id,
+      name,
+      description,
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || "Não foi possível atualizar o projeto.");
+    }
+
+    const updated = result.data;
+
+    // Atualiza a lista de projetos em memória
+    setProjects((prev) =>
+      prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+    );
+
+    // Se o projeto alterado for o ativo, atualiza o estado ativo
+    if (activeProject?.id === updated.id) {
+      setActiveProject((prev) => ({ ...prev, ...updated }));
+    }
+
+    return updated;
+  };
+
   return (
     <ProjectContext.Provider
       value={{
@@ -110,6 +144,7 @@ export function ProjectProvider({ children }) {
         setActiveProject: handleSetActiveProject,
         refreshProjects: fetchProjects,
         createProject,
+        updateProject,
       }}
     >
       {children}
