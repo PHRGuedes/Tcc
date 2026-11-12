@@ -20,6 +20,14 @@ export function useAuth() {
 
         if (user) {
           setUser(user);
+
+          // Autocura de cookies: se o user_metadata antigo continha base64 no token JWT, limpa para não inchar os cookies
+          if (user.user_metadata?.avatar_url?.startsWith("data:")) {
+            supabase.auth.updateUser({
+              data: { avatar_url: null },
+            });
+          }
+
           const { data: profileData } = await supabase
             .from("profiles")
             .select("*")

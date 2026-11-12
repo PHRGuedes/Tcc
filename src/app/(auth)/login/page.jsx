@@ -20,7 +20,7 @@ export default function LoginPage() {
     setErrorMsg("");
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -29,6 +29,29 @@ export default function LoginPage() {
         console.warn("Auth Supabase:", error.message);
         setErrorMsg(error.message || "Credenciais inválidas. Verifique seu e-mail e senha.");
       } else {
+        // 1. Se o usuário tinha um avatar base64 gravado no auth.users na nuvem, limpa do user_metadata
+        // Isso faz o Supabase reemitir um JWT compacto (< 1KB) e substitui o cookie antes do redirecionamento
+        if (data?.user?.user_metadata?.avatar_url) {
+          try {
+            await supabase.auth.updateUser({
+              data: { avatar_url: null },
+            });
+          } catch (cleanErr) {
+            console.warn("Aviso ao higienizar metadados do auth:", cleanErr);
+          }
+        }
+
+        // 2. Limpar explicitamente quaisquer chunks órfãos de cookies anteriores no navegador
+        if (typeof document !== "undefined") {
+          const cookies = document.cookie.split(";");
+          for (const c of cookies) {
+            const name = c.split("=")[0].trim();
+            if (name.includes("-auth-token.") && !name.endsWith(".0")) {
+              document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+            }
+          }
+        }
+
         router.push("/");
         router.refresh();
       }

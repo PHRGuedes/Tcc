@@ -160,11 +160,16 @@ export function EditProfileModal({ isOpen, onClose }) {
       }
 
       // 2. Atualizar user_metadata e senha (se alterada) no auth
+      // CRÍTICO: NUNCA armazenar base64 dentro do user_metadata do Supabase Auth.
+      // O Supabase Auth insere todo o user_metadata no token JWT salvo nos cookies HTTP da sessão.
+      // Cookies com base64 ultrapassam o limite de cabeçalho do Node.js causando HTTP 431 (Header Too Large).
+      // A foto fica salva com segurança e alta performance na coluna avatar_url da tabela public.profiles!
+      const isShortUrl = avatarUrl && !avatarUrl.startsWith("data:") && avatarUrl.length < 500;
       const authUpdatePayload = {
         data: {
           full_name: fullName.trim(),
           role: role,
-          avatar_url: avatarUrl || null,
+          avatar_url: isShortUrl ? avatarUrl : null,
         },
       };
 
