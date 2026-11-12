@@ -583,9 +583,17 @@ export function ManageProjectModal({ isOpen, onClose }) {
                         >
                           {/* Info do Usuário */}
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-[#13233f] text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-2xs shrink-0 border border-slate-700">
-                              {getInitials(profile.full_name)}
-                            </div>
+                            {profile.avatar_url ? (
+                              <img
+                                src={profile.avatar_url}
+                                alt={profile.full_name || "Membro"}
+                                className="w-9 h-9 rounded-full object-cover border border-slate-300 dark:border-slate-700 shadow-2xs shrink-0"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-[#13233f] text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-2xs shrink-0 border border-slate-700">
+                                {getInitials(profile.full_name)}
+                              </div>
+                            )}
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">

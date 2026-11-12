@@ -11,6 +11,8 @@ import {
   Settings,
   Sun,
   Moon,
+  User,
+  LogOut,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useProject } from "@/components/layout/project-context";
@@ -18,16 +20,19 @@ import { useTheme } from "@/components/layout/theme-provider";
 import { getInitials } from "@/lib/utils/formatters";
 import { ROLE_LABELS } from "@/lib/constants/roles";
 import { ManageProjectModal } from "@/components/modules/projects/manage-project-modal";
+import { EditProfileModal } from "@/components/modules/profile/edit-profile-modal";
 
 export function Topbar({ title = "Dashboard" }) {
-  const { profile, loading } = useAuth();
+  const { profile, loading, signOut } = useAuth();
   const { activeProject, projects, setActiveProject, createProject } = useProject();
   const { theme, toggleTheme } = useTheme();
 
   const [mounted, setMounted] = useState(false);
   const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -183,19 +188,92 @@ export function Topbar({ title = "Dashboard" }) {
         {/* Divider */}
         <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
 
-        {/* User Card */}
-        <div className="flex items-center gap-3 pl-1">
-          <div className="w-9 h-9 rounded-xl bg-[#112240] dark:bg-blue-600 text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-sm">
-            {userInitials}
-          </div>
-          <div className="hidden md:flex flex-col text-left">
-            <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-tight">
-              {profile?.full_name || (loading ? "Carregando..." : "Não autenticado")}
-            </span>
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
-              {roleLabel}
-            </span>
-          </div>
+        {/* User Card & Dropdown Menu */}
+        <div className="relative">
+          <button
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="flex items-center gap-2.5 sm:gap-3 pl-1 py-1 pr-2 rounded-xl hover:bg-slate-100/80 dark:hover:bg-slate-800/60 transition-all cursor-pointer select-none group border border-transparent hover:border-slate-200 dark:hover:border-slate-700/60"
+            title="Menu do Usuário (Clique para editar perfil ou sair)"
+          >
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt={profile.full_name || "Avatar"}
+                className="w-9 h-9 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-sm shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-[#112240] dark:bg-blue-600 text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-sm shrink-0">
+                {userInitials}
+              </div>
+            )}
+            <div className="hidden md:flex flex-col text-left">
+              <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                {profile?.full_name || (loading ? "Carregando..." : "Não autenticado")}
+              </span>
+              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                {roleLabel}
+              </span>
+            </div>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 hidden md:block group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors" />
+          </button>
+
+          {/* User Menu Dropdown */}
+          {showUserMenu && (
+            <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-2 z-50 animate-in fade-in slide-in-from-top-1 text-slate-900 dark:text-slate-100">
+              {/* Profile Overview Header */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center gap-3 mb-2">
+                {profile?.avatar_url ? (
+                  <img
+                    src={profile.avatar_url}
+                    alt={profile.full_name || "Avatar"}
+                    className="w-10 h-10 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-[#112240] dark:bg-blue-600 text-white flex items-center justify-center font-bold text-xs tracking-wider shadow-2xs shrink-0">
+                    {userInitials}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                    {profile?.full_name || "Usuário"}
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                    {profile?.email || ""}
+                  </p>
+                  <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/60">
+                    {roleLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Menu Actions */}
+              <div className="space-y-1">
+                <button
+                  onClick={() => {
+                    setShowProfileModal(true);
+                    setShowUserMenu(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80 rounded-xl transition-colors cursor-pointer"
+                >
+                  <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                  <span>Editar Meu Perfil</span>
+                </button>
+
+                <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
+
+                <button
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    signOut();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sair da Conta</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>
@@ -288,6 +366,12 @@ export function Topbar({ title = "Dashboard" }) {
       key={activeProject?.id || "manage-modal"}
       isOpen={showManageModal}
       onClose={() => setShowManageModal(false)}
+    />
+
+    {/* Modal Editar Perfil do Usuário */}
+    <EditProfileModal
+      isOpen={showProfileModal}
+      onClose={() => setShowProfileModal(false)}
     />
   </>
   );

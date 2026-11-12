@@ -54,9 +54,17 @@ export function ActivityFeed({ activities }) {
           const initials = getInitials(item.user_name);
           return (
             <div key={item.id || idx} className="py-3.5 flex items-center gap-3.5">
-              <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold text-xs shrink-0 border border-slate-200 dark:border-slate-700">
-                {initials}
-              </div>
+              {item.avatar_url ? (
+                <img
+                  src={item.avatar_url}
+                  alt={item.user_name}
+                  className="w-9 h-9 rounded-full object-cover shrink-0 border border-slate-200 dark:border-slate-700 shadow-2xs"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold text-xs shrink-0 border border-slate-200 dark:border-slate-700">
+                  {initials}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-700 dark:text-slate-300 leading-snug truncate">
                   <strong className="font-semibold text-slate-900 dark:text-white">

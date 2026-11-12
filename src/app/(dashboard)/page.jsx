@@ -76,7 +76,7 @@ export default function DashboardPage() {
         // Buscar atividades recentes de auditoria do projeto ativo
         const { data: logs } = await supabase
           .from("audit_logs")
-          .select("id, action, description, created_at, profiles(full_name)")
+          .select("id, action, description, created_at, profiles(full_name, avatar_url)")
           .eq("project_id", activeProject.id)
           .order("created_at", { ascending: false })
           .limit(5);
@@ -86,6 +86,7 @@ export default function DashboardPage() {
             logs.map((log) => ({
               id: log.id,
               user_name: log.profiles?.full_name || "Membro da Equipe",
+              avatar_url: log.profiles?.avatar_url || null,
               text: log.description,
               time: new Date(log.created_at).toLocaleTimeString([], {
                 hour: "2-digit",

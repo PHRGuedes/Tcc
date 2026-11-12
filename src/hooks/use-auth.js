@@ -88,5 +88,29 @@ export function useAuth() {
     router.refresh();
   };
 
-  return { user, profile, loading, signOut };
+  const refreshProfile = async () => {
+    try {
+      const {
+        data: { user: currentUser },
+      } = await supabase.auth.getUser();
+
+      if (currentUser) {
+        setUser(currentUser);
+        const { data: profileData } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", currentUser.id)
+          .single();
+
+        if (profileData) {
+          setProfile(profileData);
+          return profileData;
+        }
+      }
+    } catch (err) {
+      console.warn("Erro ao atualizar perfil:", err);
+    }
+  };
+
+  return { user, profile, loading, signOut, refreshProfile };
 }
