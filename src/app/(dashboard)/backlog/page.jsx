@@ -152,7 +152,7 @@ function SprintModal({ activeProject, supabase, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
       <div className="bg-white dark:bg-[#0f172a] rounded-2xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in-95">
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">

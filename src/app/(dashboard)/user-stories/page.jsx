@@ -259,7 +259,7 @@ export default function UserStoriesPage() {
 
       {/* Modal Nova User Story */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
           <div className="bg-white dark:bg-[#0f172a] rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95">
             <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">Cadastrar User Story</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   X,
   SlidersHorizontal,
@@ -45,7 +46,12 @@ export const ALLOWED_PROJECT_ROLES = [
 export function ManageProjectModal({ isOpen, onClose }) {
   const { activeProject, updateProject } = useProject();
 
+  const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("general"); // "general" | "stakeholders"
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Estado da aba Geral - inicializado diretamente a partir do activeProject
   const [projectName, setProjectName] = useState(activeProject?.name || "");
@@ -253,8 +259,8 @@ export function ManageProjectModal({ isOpen, onClose }) {
     (profile) => !members.some((m) => m.user_id === profile.id)
   );
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto animate-in fade-in duration-150">
+  const modalContent = (
+    <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-[100] p-4 overflow-y-auto animate-in fade-in duration-150">
       <div className="bg-white dark:bg-[#0f172a] rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-8 flex flex-col text-slate-900 dark:text-slate-100">
         {/* Header do Modal */}
         <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#0f172a]">
@@ -665,4 +671,10 @@ export function ManageProjectModal({ isOpen, onClose }) {
       </div>
     </div>
   );
+
+  if (mounted && typeof document !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 }

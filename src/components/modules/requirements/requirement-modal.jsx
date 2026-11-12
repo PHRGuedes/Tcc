@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, History, Send, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -44,6 +45,11 @@ export function RequirementModal({
   const [versions, setVersions] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (requirement) {
@@ -248,8 +254,8 @@ export function RequirementModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+  const modalContent = (
+    <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-[100] p-4 overflow-y-auto">
       <div className="bg-white dark:bg-[#0f172a] rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-8 animate-in fade-in zoom-in-95">
         {/* Modal Header */}
         <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#0f172a]">
@@ -502,4 +508,10 @@ export function RequirementModal({
       </div>
     </div>
   );
+
+  if (mounted && typeof document !== "undefined") {
+    return createPortal(modalContent, document.body);
+  }
+
+  return modalContent;
 }
