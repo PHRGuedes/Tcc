@@ -165,3 +165,4 @@ export async function updateStoryPlacementAction(storyId, { status, sprintId }) 
     return { success: false, error: "Erro interno no servidor." };
   }
 }
+

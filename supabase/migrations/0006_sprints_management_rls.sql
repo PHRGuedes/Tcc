@@ -15,3 +15,4 @@ CREATE POLICY "sprints_all"
     TO authenticated
     USING (true)
     WITH CHECK (true);
+
