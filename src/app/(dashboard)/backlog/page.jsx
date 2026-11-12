@@ -26,13 +26,38 @@ import { Topbar } from "@/components/layout/topbar";
 import { PriorityBadge } from "@/components/ui/badge";
 import { useProject } from "@/components/layout/project-context";
 import { createClient } from "@/lib/supabase/client";
-import { STORY_STATUS_COLUMNS, STORY_STATUSES } from "@/lib/constants/statuses";
+import { STORY_STATUSES } from "@/lib/constants/statuses";
 import {
   createSprintAction,
   archiveSprintAction,
   deleteSprintAction,
   updateStoryPlacementAction,
 } from "@/app/actions/sprints";
+
+// Colunas do Kanban dentro de cada Sprint (apenas o fluxo de execução da sprint)
+export const SPRINT_KANBAN_COLUMNS = [
+  {
+    id: STORY_STATUSES.TODO,
+    title: "A Fazer",
+    colorDot: "bg-amber-500 dark:bg-amber-400",
+  },
+  {
+    id: STORY_STATUSES.IN_PROGRESS,
+    title: "Em Progresso",
+    colorDot: "bg-blue-600 dark:bg-blue-400",
+  },
+  {
+    id: STORY_STATUSES.DONE,
+    title: "Concluído",
+    colorDot: "bg-emerald-500 dark:bg-emerald-400",
+  },
+];
+
+const SPRINT_FLOW_ORDER = [
+  STORY_STATUSES.TODO,
+  STORY_STATUSES.IN_PROGRESS,
+  STORY_STATUSES.DONE,
+];
 
 function formatDateDisplay(dateStr) {
   if (!dateStr || dateStr === "--") return "--";
@@ -60,6 +85,9 @@ export function StoryCard({
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [showSprintMenu, setShowSprintMenu] = useState(false);
+
+  const isInSprint = Boolean(story.sprint_id);
+  const currentSprintIndex = SPRINT_FLOW_ORDER.indexOf(story.status);
 
   return (
     <div
@@ -98,93 +126,97 @@ export function StoryCard({
         </div>
       </div>
 
-      {/* Quick Move Action Buttons on Hover */}
+      {/* Ações Rápidas nos Cards */}
       <div className="mt-3 pt-2 border-t border-dashed border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400 opacity-80 group-hover:opacity-100 transition-opacity">
-        <div className="flex items-center gap-1">
-          {story.status !== STORY_STATUSES.BACKLOG && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onMoveStatus(story, -1);
-              }}
-              title="Mover para coluna anterior"
-              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300 cursor-pointer"
-            >
-              <ArrowLeft className="w-3 h-3" />
-            </button>
-          )}
-          {story.status !== STORY_STATUSES.DONE && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onMoveStatus(story, 1);
-              }}
-              title="Avançar status"
-              className="p-1 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-0.5 cursor-pointer"
-            >
-              <span>Avançar</span>
-              <ChevronRight className="w-3 h-3" />
-            </button>
-          )}
-        </div>
+        {isInSprint ? (
+          <>
+            <div className="flex items-center gap-1">
+              {currentSprintIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveStatus(story, -1);
+                  }}
+                  title="Voltar status"
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-600 dark:text-slate-300 cursor-pointer"
+                >
+                  <ArrowLeft className="w-3 h-3" />
+                </button>
+              )}
+              {currentSprintIndex < SPRINT_FLOW_ORDER.length - 1 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMoveStatus(story, 1);
+                  }}
+                  title="Avançar status"
+                  className="p-1 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>Avançar</span>
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              )}
+            </div>
 
-        {/* Options to unlink or assign to sprint */}
-        {story.sprint_id ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onUnlinkSprint(story);
-            }}
-            title="Mover para Backlog Geral (desvincular da sprint)"
-            className="text-[10px] text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors cursor-pointer"
-          >
-            Desvincular
-          </button>
-        ) : (
-          <div className="relative">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setShowSprintMenu(!showSprintMenu);
+                onUnlinkSprint(story);
               }}
-              title="Atribuir à sprint"
-              className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+              title="Mover para o Backlog do Produto (desvincular da sprint)"
+              className="text-[10px] text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors cursor-pointer"
             >
-              <span>+ Sprint</span>
+              Desvincular
             </button>
-            {showSprintMenu && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 bottom-6 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1 z-30 space-y-0.5 animate-in fade-in"
+          </>
+        ) : (
+          <div className="w-full flex items-center justify-between">
+            <span className="text-[10px] text-slate-400">Não planejada</span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowSprintMenu(!showSprintMenu);
+                }}
+                title="Atribuir a uma sprint"
+                className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 cursor-pointer"
               >
-                <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase">
-                  Vincular à Sprint
-                </div>
-                {sprints.length === 0 ? (
-                  <div className="px-2 py-2 text-[11px] text-slate-400 italic">
-                    Nenhuma sprint disponível
+                <span>+ Sprint</span>
+              </button>
+              {showSprintMenu && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 bottom-6 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl p-1 z-30 space-y-0.5 animate-in fade-in"
+                >
+                  <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase">
+                    Vincular à Sprint
                   </div>
-                ) : (
-                  sprints.map((sp) => (
-                    <button
-                      key={sp.id}
-                      type="button"
-                      onClick={() => {
-                        onAssignSprint(story, sp.id);
-                        setShowSprintMenu(false);
-                      }}
-                      className="w-full text-left px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-950/50 hover:text-blue-600 rounded-lg transition-colors truncate"
-                    >
-                      {sp.name}
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+                  {sprints.length === 0 ? (
+                    <div className="px-2 py-2 text-[11px] text-slate-400 italic">
+                      Nenhuma sprint ativa
+                    </div>
+                  ) : (
+                    sprints.map((sp) => (
+                      <button
+                        key={sp.id}
+                        type="button"
+                        onClick={() => {
+                          onAssignSprint(story, sp.id);
+                          setShowSprintMenu(false);
+                        }}
+                        className="w-full text-left px-2 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-950/50 hover:text-blue-600 rounded-lg transition-colors truncate"
+                      >
+                        {sp.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -239,7 +271,7 @@ export function KanbanColumn({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`rounded-2xl p-4 border flex flex-col min-h-[460px] transition-all duration-150 ${
+      className={`rounded-2xl p-4 border flex flex-col min-h-[420px] transition-all duration-150 ${
         isOver
           ? "bg-blue-50/60 dark:bg-blue-950/40 border-blue-500 dark:border-blue-500 ring-2 ring-blue-500/20"
           : "bg-slate-200/50 dark:bg-[#0c1427]/80 border-slate-300/70 dark:border-slate-800/80"
@@ -472,7 +504,7 @@ function DeleteSprintModal({ sprint, storiesCount, onClose, onConfirm, isDeletin
               {storiesCount > 0
                 ? `${storiesCount} histórias associadas retornarão`
                 : "As histórias associadas retornarão"}{" "}
-              automaticamente para o Backlog Geral e nenhuma história será perdida.
+              automaticamente para o Backlog do Produto e nenhuma história será perdida.
             </span>
           </div>
 
@@ -510,10 +542,161 @@ function DeleteSprintModal({ sprint, storiesCount, onClose, onConfirm, isDeletin
   );
 }
 
+/**
+ * Modal exclusivo para visualização e desarquivamento de Sprints Arquivadas
+ */
+function ArchivedSprintsModal({
+  isOpen,
+  onClose,
+  archivedSprints,
+  stories,
+  onUnarchive,
+  onDeleteRequest,
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-[100] p-4 animate-in fade-in">
+      <div className="bg-white dark:bg-[#0f172a] rounded-2xl w-full max-w-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85vh]">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <Archive className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Sprints Arquivadas
+                </h2>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                  {archivedSprints.length}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Sprints finalizadas ou arquivadas. Clique em "Desarquivar" para trazê-las de volta ao quadro.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto space-y-4 flex-1">
+          {archivedSprints.length === 0 ? (
+            <div className="py-12 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                <Archive className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">
+                Nenhuma sprint arquivada
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                Quando você arquivar uma sprint no quadro principal, ela ficará guardada aqui para consulta ou reativação.
+              </p>
+            </div>
+          ) : (
+            archivedSprints.map((sprint) => {
+              const sprintStories = stories.filter((s) => s.sprint_id === sprint.id);
+              const doneCount = sprintStories.filter((s) => s.status === STORY_STATUSES.DONE).length;
+              const progress =
+                sprintStories.length > 0
+                  ? Math.round((doneCount / sprintStories.length) * 100)
+                  : 100;
+
+              return (
+                <div
+                  key={sprint.id}
+                  className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        {sprint.name}
+                      </h4>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
+                        Arquivada
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3 text-slate-400" />
+                        {formatDateDisplay(sprint.start_date)} — {formatDateDisplay(sprint.end_date)}
+                      </span>
+                      <span>•</span>
+                      <span>
+                        {sprintStories.length} histórias ({doneCount} concluídas)
+                      </span>
+                    </div>
+
+                    {sprint.goal && (
+                      <p className="text-xs text-slate-600 dark:text-slate-300 italic pt-1">
+                        "{sprint.goal}"
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
+                    <div className="w-28 hidden sm:block">
+                      <div className="flex items-center justify-between text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        <span>Progresso</span>
+                        <span>{progress}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => onUnarchive(sprint)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-xl transition-colors cursor-pointer"
+                      title="Desarquivar e retornar ao quadro principal"
+                    >
+                      <ArchiveRestore className="w-3.5 h-3.5" />
+                      <span>Desarquivar</span>
+                    </button>
+
+                    <button
+                      onClick={() => onDeleteRequest(sprint, sprintStories.length)}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl transition-colors cursor-pointer"
+                      title="Excluir sprint"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end bg-slate-50 dark:bg-slate-900/60">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SprintBlock({
   sprint,
   stories = [],
-  allSprints = [],
+  allActiveSprints = [],
   isCollapsed,
   onToggleCollapse,
   onArchive,
@@ -532,13 +715,9 @@ function SprintBlock({
   const progress =
     sprintStories.length > 0
       ? Math.round((doneCount / sprintStories.length) * 100)
-      : sprint.status === "completed"
-      ? 100
       : 0;
 
-  const isCompleted = sprint.status === "completed";
-
-  // Collapsed / Resumida View
+  // Visualização Resumida (Collapsed)
   if (isCollapsed) {
     return (
       <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all">
@@ -557,14 +736,8 @@ function SprintBlock({
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">
                   {sprint.name}
                 </h3>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                    isCompleted
-                      ? "bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
-                      : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                  }`}
-                >
-                  {isCompleted ? "Arquivada" : "Ativa"}
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  Ativa
                 </span>
               </div>
 
@@ -615,18 +788,10 @@ function SprintBlock({
 
               <button
                 onClick={() => onArchive(sprint)}
-                className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                  isCompleted
-                    ? "text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 hover:bg-purple-100"
-                    : "text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 border-transparent hover:bg-slate-100 dark:hover:bg-slate-800"
-                }`}
-                title={isCompleted ? "Desarquivar sprint" : "Arquivar sprint"}
+                className="p-1.5 rounded-lg border border-transparent text-slate-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Arquivar sprint"
               >
-                {isCompleted ? (
-                  <ArchiveRestore className="w-4 h-4" />
-                ) : (
-                  <Archive className="w-4 h-4" />
-                )}
+                <Archive className="w-4 h-4" />
               </button>
 
               <button
@@ -643,10 +808,10 @@ function SprintBlock({
     );
   }
 
-  // Expanded View
+  // Visualização Completa (Expanded) com 3 Colunas: A Fazer, Em Progresso, Concluído
   return (
     <div className="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm space-y-6 transition-colors">
-      {/* Sprint Header Banner Card */}
+      {/* Banner da Sprint */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800/80 pb-5">
         <div className="flex items-start gap-3">
           <button
@@ -662,14 +827,8 @@ function SprintBlock({
               <h2 className="text-base font-bold text-slate-900 dark:text-white">
                 {sprint.name}
               </h2>
-              <span
-                className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                  isCompleted
-                    ? "bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
-                    : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
-                }`}
-              >
-                {isCompleted ? "Arquivada" : "Ativa"}
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                Ativa
               </span>
             </div>
 
@@ -711,7 +870,7 @@ function SprintBlock({
             </div>
           </div>
 
-          {/* Action buttons: Resumir, Arquivar, Excluir */}
+          {/* Ações da Sprint: Resumir, Arquivar, Excluir */}
           <div className="flex items-center gap-2 border-l border-slate-200 dark:border-slate-800 pl-3">
             <button
               onClick={() => onToggleCollapse(sprint.id)}
@@ -724,24 +883,11 @@ function SprintBlock({
 
             <button
               onClick={() => onArchive(sprint)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-colors cursor-pointer ${
-                isCompleted
-                  ? "text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800 hover:bg-purple-100"
-                  : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700"
-              }`}
-              title={isCompleted ? "Desarquivar sprint" : "Arquivar sprint"}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Arquivar sprint (vai para a lista de arquivadas)"
             >
-              {isCompleted ? (
-                <>
-                  <ArchiveRestore className="w-3.5 h-3.5" />
-                  <span>Desarquivar</span>
-                </>
-              ) : (
-                <>
-                  <Archive className="w-3.5 h-3.5" />
-                  <span>Arquivar</span>
-                </>
-              )}
+              <Archive className="w-3.5 h-3.5" />
+              <span>Arquivar</span>
             </button>
 
             <button
@@ -756,21 +902,31 @@ function SprintBlock({
         </div>
       </div>
 
-      {/* 4 Kanban Columns */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {STORY_STATUS_COLUMNS.map((col) => (
-          <KanbanColumn
-            key={col.id}
-            column={col}
-            sprintId={sprint.id}
-            stories={sprintStories.filter((s) => s.status === col.id)}
-            sprints={allSprints}
-            onMoveStatus={onMoveStatus}
-            onDropStory={onDropStory}
-            onUnlinkSprint={onUnlinkSprint}
-            onAssignSprint={onAssignSprint}
-          />
-        ))}
+      {/* 3 Colunas Kanban da Sprint: A Fazer, Em Progresso, Concluído */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {SPRINT_KANBAN_COLUMNS.map((col) => {
+          // Histórias da coluna correspondente (se uma história tiver status backlog, ela é exibida em A Fazer para execução)
+          const columnStories = sprintStories.filter((s) => {
+            if (col.id === STORY_STATUSES.TODO) {
+              return s.status === STORY_STATUSES.TODO || s.status === STORY_STATUSES.BACKLOG;
+            }
+            return s.status === col.id;
+          });
+
+          return (
+            <KanbanColumn
+              key={col.id}
+              column={col}
+              sprintId={sprint.id}
+              stories={columnStories}
+              sprints={allActiveSprints}
+              onMoveStatus={onMoveStatus}
+              onDropStory={onDropStory}
+              onUnlinkSprint={onUnlinkSprint}
+              onAssignSprint={onAssignSprint}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -784,6 +940,8 @@ export default function BacklogPage() {
   const [stories, setStories] = useState([]);
   const [collapsedSprints, setCollapsedSprints] = useState({});
   const [showSprintModal, setShowSprintModal] = useState(false);
+  const [showArchivedModal, setShowArchivedModal] = useState(false);
+
   const [deleteModalState, setDeleteModalState] = useState({
     isOpen: false,
     sprint: null,
@@ -791,8 +949,6 @@ export default function BacklogPage() {
     isDeleting: false,
   });
 
-  // Filter tab: 'all' | 'active' | 'archived'
-  const [sprintFilter, setSprintFilter] = useState("all");
   const [isBacklogCollapsed, setIsBacklogCollapsed] = useState(false);
   const [isDropOverGeneralBacklog, setIsDropOverGeneralBacklog] = useState(false);
 
@@ -801,7 +957,7 @@ export default function BacklogPage() {
       if (!activeProject?.id) return;
       try {
         // 1. Buscar todas as sprints do projeto
-        const { data: dbSprints, error: sprintsError } = await supabase
+        const { data: dbSprints } = await supabase
           .from("sprints")
           .select("*")
           .eq("project_id", activeProject.id)
@@ -832,7 +988,7 @@ export default function BacklogPage() {
           setSprints([]);
         }
 
-        // 2. Buscar todas as histórias de usuário vinculadas ao projeto
+        // 2. Buscar histórias de usuário vinculadas ao projeto
         const { data: dbStories } = await supabase
           .from("user_stories")
           .select("*, requirement_user_stories(count)")
@@ -932,13 +1088,6 @@ export default function BacklogPage() {
     loadBacklog();
   }, [activeProject?.id, supabase]);
 
-  const order = [
-    STORY_STATUSES.BACKLOG,
-    STORY_STATUSES.TODO,
-    STORY_STATUSES.IN_PROGRESS,
-    STORY_STATUSES.DONE,
-  ];
-
   // Alternar colapso / resumo de uma sprint
   const handleToggleCollapse = (sprintId) => {
     setCollapsedSprints((prev) => ({
@@ -947,7 +1096,7 @@ export default function BacklogPage() {
     }));
   };
 
-  // Recolher todas ou expandir todas
+  // Recolher todas ou expandir todas as sprints ativas
   const handleToggleAllCollapse = (collapseAll) => {
     const updated = {};
     sprints.forEach((s) => {
@@ -956,13 +1105,15 @@ export default function BacklogPage() {
     setCollapsedSprints(updated);
   };
 
-  // Mover status por setas (dentro da sprint ou backlog)
+  // Mover status de história dentro da sprint (A Fazer <-> Em Progresso <-> Concluído)
   const handleMoveStatus = async (story, direction) => {
-    const currentIndex = order.indexOf(story.status);
+    const currentIndex = SPRINT_FLOW_ORDER.indexOf(
+      story.status === STORY_STATUSES.BACKLOG ? STORY_STATUSES.TODO : story.status
+    );
     const newIndex = currentIndex + direction;
-    if (newIndex < 0 || newIndex >= order.length) return;
+    if (newIndex < 0 || newIndex >= SPRINT_FLOW_ORDER.length) return;
 
-    const newStatus = order[newIndex];
+    const newStatus = SPRINT_FLOW_ORDER[newIndex];
 
     setStories((prev) =>
       prev.map((s) => (s.id === story.id ? { ...s, status: newStatus } : s))
@@ -975,7 +1126,7 @@ export default function BacklogPage() {
     }
   };
 
-  // Mover via drag-and-drop para qualquer coluna de qualquer sprint
+  // Drag and drop para qualquer coluna de uma sprint
   const handleDropStory = async (storyId, targetStatus, targetSprintId) => {
     const story = stories.find((s) => s.id === storyId);
     if (!story) return;
@@ -1000,7 +1151,7 @@ export default function BacklogPage() {
     }
   };
 
-  // Desvincular história de uma sprint (volta para o Backlog Geral)
+  // Desvincular história de uma sprint (volta para o Backlog do Produto no topo)
   const handleUnlinkSprint = async (story) => {
     setStories((prev) =>
       prev.map((s) =>
@@ -1018,38 +1169,49 @@ export default function BacklogPage() {
     }
   };
 
-  // Vincular história a uma sprint
+  // Vincular história a uma sprint (status inicial: A Fazer)
   const handleAssignSprint = async (story, targetSprintId) => {
     setStories((prev) =>
-      prev.map((s) => (s.id === story.id ? { ...s, sprint_id: targetSprintId } : s))
+      prev.map((s) =>
+        s.id === story.id
+          ? { ...s, sprint_id: targetSprintId, status: STORY_STATUSES.TODO }
+          : s
+      )
     );
 
     try {
-      await updateStoryPlacementAction(story.id, { sprintId: targetSprintId });
+      await updateStoryPlacementAction(story.id, {
+        sprintId: targetSprintId,
+        status: STORY_STATUSES.TODO,
+      });
     } catch (err) {
       console.warn("Erro ao vincular história à sprint:", err);
     }
   };
 
-  // Arquivar / Desarquivar sprint
+  // Arquivar sprint (some da tela principal e vai para a lista de arquivadas)
   const handleArchiveSprint = async (sprint) => {
-    const willArchive = sprint.status !== "completed";
-
     setSprints((prev) =>
-      prev.map((s) =>
-        s.id === sprint.id ? { ...s, status: willArchive ? "completed" : "active" } : s
-      )
+      prev.map((s) => (s.id === sprint.id ? { ...s, status: "completed" } : s))
     );
 
-    // Se arquivar, resumir automaticamente para não ocupar espaço
-    if (willArchive) {
-      setCollapsedSprints((prev) => ({ ...prev, [sprint.id]: true }));
-    }
-
     try {
-      await archiveSprintAction(sprint.id, willArchive);
+      await archiveSprintAction(sprint.id, true);
     } catch (err) {
       console.warn("Erro ao arquivar sprint:", err);
+    }
+  };
+
+  // Desarquivar sprint (volta a aparecer na tela principal)
+  const handleUnarchiveSprint = async (sprint) => {
+    setSprints((prev) =>
+      prev.map((s) => (s.id === sprint.id ? { ...s, status: "active" } : s))
+    );
+
+    try {
+      await archiveSprintAction(sprint.id, false);
+    } catch (err) {
+      console.warn("Erro ao desarquivar sprint:", err);
     }
   };
 
@@ -1074,7 +1236,9 @@ export default function BacklogPage() {
     setSprints((prev) => prev.filter((s) => s.id !== sprintId));
     setStories((prev) =>
       prev.map((s) =>
-        s.sprint_id === sprintId ? { ...s, sprint_id: null, status: STORY_STATUSES.BACKLOG } : s
+        s.sprint_id === sprintId
+          ? { ...s, sprint_id: null, status: STORY_STATUSES.BACKLOG }
+          : s
       )
     );
 
@@ -1092,25 +1256,23 @@ export default function BacklogPage() {
     }
   };
 
-  // Filtragem de sprints para exibição
-  const filteredSprints = useMemo(() => {
-    if (sprintFilter === "active") {
-      return sprints.filter((s) => s.status !== "completed");
-    }
-    if (sprintFilter === "archived") {
-      return sprints.filter((s) => s.status === "completed");
-    }
-    return sprints;
-  }, [sprints, sprintFilter]);
+  // Sprints ativas: SOMENTE estas aparecem na tela principal!
+  const activeSprints = useMemo(
+    () => sprints.filter((s) => s.status !== "completed"),
+    [sprints]
+  );
 
-  // Histórias não atribuídas a nenhuma sprint existente
+  // Sprints arquivadas: aparecem apenas no modal "Sprints Arquivadas"
+  const archivedSprints = useMemo(
+    () => sprints.filter((s) => s.status === "completed"),
+    [sprints]
+  );
+
+  // Histórias não atribuídas a nenhuma sprint ativa (Backlog do Produto)
   const unassignedStories = useMemo(() => {
-    const validSprintIds = new Set(sprints.map((s) => s.id));
-    return stories.filter((s) => !s.sprint_id || !validSprintIds.has(s.sprint_id));
-  }, [stories, sprints]);
-
-  const activeCount = sprints.filter((s) => s.status !== "completed").length;
-  const archivedCount = sprints.filter((s) => s.status === "completed").length;
+    const activeSprintIds = new Set(activeSprints.map((s) => s.id));
+    return stories.filter((s) => !s.sprint_id || !activeSprintIds.has(s.sprint_id));
+  }, [stories, activeSprints]);
 
   return (
     <>
@@ -1127,6 +1289,16 @@ export default function BacklogPage() {
           }}
         />
       )}
+
+      {/* Modal de Sprints Arquivadas (com opção de desarquivar) */}
+      <ArchivedSprintsModal
+        isOpen={showArchivedModal}
+        onClose={() => setShowArchivedModal(false)}
+        archivedSprints={archivedSprints}
+        stories={stories}
+        onUnarchive={handleUnarchiveSprint}
+        onDeleteRequest={handleDeleteRequest}
+      />
 
       {/* Modal de Confirmação para Excluir Sprint */}
       {deleteModalState.isOpen && (
@@ -1147,45 +1319,34 @@ export default function BacklogPage() {
       )}
 
       <div className="p-6 md:p-8 max-w-7xl w-full mx-auto space-y-6">
-        {/* Top Control Bar: Filtros, Estatísticas e Botões Principais */}
+        {/* Top Control Bar: Status das Sprints Ativas, Botão de Arquivadas e Ações */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white dark:bg-[#0f172a] rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 shadow-xs">
-          {/* Tabs de Filtro de Sprints */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl w-fit">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                Sprints Ativas ({activeSprints.length})
+              </h2>
+            </div>
+
+            {/* Opção para Ver e Desarquivar Sprints Arquivadas */}
             <button
-              onClick={() => setSprintFilter("all")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                sprintFilter === "all"
-                  ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-              }`}
+              onClick={() => setShowArchivedModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:text-purple-600 dark:hover:text-purple-400 hover:border-purple-300 dark:hover:border-purple-800 transition-all cursor-pointer shadow-2xs"
+              title="Visualizar sprints arquivadas e desarquivar"
             >
-              Todas ({sprints.length})
-            </button>
-            <button
-              onClick={() => setSprintFilter("active")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                sprintFilter === "active"
-                  ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-              }`}
-            >
-              Ativas ({activeCount})
-            </button>
-            <button
-              onClick={() => setSprintFilter("archived")}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                sprintFilter === "archived"
-                  ? "bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 shadow-xs"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
-              }`}
-            >
-              Arquivadas ({archivedCount})
+              <Archive className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span>Sprints Arquivadas</span>
+              {archivedSprints.length > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[10px] font-bold">
+                  {archivedSprints.length}
+                </span>
+              )}
             </button>
           </div>
 
-          {/* Ações Globais: Recolher/Expandir e Nova Sprint */}
           <div className="flex items-center gap-2.5 flex-wrap">
-            {sprints.length > 0 && (
+            {activeSprints.length > 0 && (
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleToggleAllCollapse(true)}
@@ -1216,55 +1377,7 @@ export default function BacklogPage() {
           </div>
         </div>
 
-        {/* Lista de Sprints Uma Embaixo da Outra */}
-        <div className="space-y-6">
-          {filteredSprints.map((sprint) => (
-            <SprintBlock
-              key={sprint.id}
-              sprint={sprint}
-              stories={stories}
-              allSprints={sprints}
-              isCollapsed={collapsedSprints[sprint.id] ?? false}
-              onToggleCollapse={handleToggleCollapse}
-              onArchive={handleArchiveSprint}
-              onDeleteRequest={handleDeleteRequest}
-              onMoveStatus={handleMoveStatus}
-              onDropStory={handleDropStory}
-              onUnlinkSprint={handleUnlinkSprint}
-              onAssignSprint={handleAssignSprint}
-            />
-          ))}
-
-          {/* Estado Vazio de Sprints */}
-          {filteredSprints.length === 0 && (
-            <div className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-[#0f172a]">
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto mb-3">
-                <Layers className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
-                {sprintFilter === "archived"
-                  ? "Nenhuma sprint arquivada"
-                  : "Nenhuma sprint cadastrada"}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mb-4">
-                {sprintFilter === "archived"
-                  ? "Sprints concluídas ou arquivadas serão listadas aqui."
-                  : "Crie sua primeira sprint para organizar o fluxo de entregas da equipe no quadro Kanban."}
-              </p>
-              {sprintFilter !== "archived" && (
-                <button
-                  onClick={() => setShowSprintModal(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Criar Nova Sprint</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Backlog Geral do Produto (Histórias Não Planejadas) */}
+        {/* 1. BACKLOG DO PRODUTO: SEMPRE NO INÍCIO DA PÁGINA (ACIMA DAS SPRINTS) */}
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -1297,13 +1410,13 @@ export default function BacklogPage() {
               : "border-slate-200 dark:border-slate-800 shadow-sm"
           }`}
         >
-          {/* Header do Backlog Geral */}
+          {/* Header do Backlog do Produto */}
           <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setIsBacklogCollapsed(!isBacklogCollapsed)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                title={isBacklogCollapsed ? "Expandir Backlog Geral" : "Resumir Backlog Geral"}
+                title={isBacklogCollapsed ? "Expandir Backlog do Produto" : "Resumir Backlog do Produto"}
               >
                 {isBacklogCollapsed ? (
                   <ChevronRight className="w-5 h-5" />
@@ -1313,7 +1426,7 @@ export default function BacklogPage() {
               </button>
 
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                   <Inbox className="w-4 h-4" />
                 </div>
                 <div>
@@ -1324,15 +1437,15 @@ export default function BacklogPage() {
                     </span>
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Histórias não planejadas ou aguardando vinculação a uma sprint.
+                    Histórias do produto não planejadas. Arraste para uma sprint abaixo para iniciar o desenvolvimento.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 hidden sm:inline">
-                Arraste histórias para cá para desvincular de sprints
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-medium text-slate-400 dark:text-slate-500 hidden md:inline">
+                Solte histórias aqui para desvinculá-las de qualquer sprint
               </span>
               <button
                 onClick={() => setIsBacklogCollapsed(!isBacklogCollapsed)}
@@ -1343,7 +1456,7 @@ export default function BacklogPage() {
             </div>
           </div>
 
-          {/* Conteúdo do Backlog Geral */}
+          {/* Cards do Backlog do Produto */}
           {!isBacklogCollapsed && (
             <div className="p-5">
               {unassignedStories.length > 0 ? (
@@ -1353,7 +1466,7 @@ export default function BacklogPage() {
                       key={story.id}
                       story={story}
                       sprintId={null}
-                      sprints={sprints}
+                      sprints={activeSprints}
                       onMoveStatus={handleMoveStatus}
                       onUnlinkSprint={handleUnlinkSprint}
                       onAssignSprint={handleAssignSprint}
@@ -1364,13 +1477,66 @@ export default function BacklogPage() {
                 <div className="py-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800/80 rounded-xl">
                   <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto mb-2 opacity-80" />
                   <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Todas as histórias de usuário estão alocadas em sprints!
+                    Todas as histórias de usuário estão alocadas em sprints ativas!
                   </p>
                   <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
-                    Histórias criadas sem sprint aparecerão aqui para planejamento.
+                    Novas histórias cadastradas aparecerão aqui automaticamente.
                   </p>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* 2. LISTA DE SPRINTS ATIVAS (UMA EMBAIXO DA OUTRA) */}
+        <div className="space-y-6">
+          {activeSprints.map((sprint) => (
+            <SprintBlock
+              key={sprint.id}
+              sprint={sprint}
+              stories={stories}
+              allActiveSprints={activeSprints}
+              isCollapsed={collapsedSprints[sprint.id] ?? false}
+              onToggleCollapse={handleToggleCollapse}
+              onArchive={handleArchiveSprint}
+              onDeleteRequest={handleDeleteRequest}
+              onMoveStatus={handleMoveStatus}
+              onDropStory={handleDropStory}
+              onUnlinkSprint={handleUnlinkSprint}
+              onAssignSprint={handleAssignSprint}
+            />
+          ))}
+
+          {/* Estado Vazio de Sprints Ativas */}
+          {activeSprints.length === 0 && (
+            <div className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-[#0f172a]">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto mb-3">
+                <Layers className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-200 mb-1">
+                Nenhuma sprint ativa no momento
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mb-4">
+                Crie uma nova sprint ou reative uma sprint em "Sprints Arquivadas" para organizar as entregas da equipe.
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                {archivedSprints.length > 0 && (
+                  <button
+                    onClick={() => setShowArchivedModal(true)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 dark:hover:bg-purple-900/40 border border-purple-200 dark:border-purple-800 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    <span>Ver Arquivadas ({archivedSprints.length})</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowSprintModal(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Criar Nova Sprint</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
