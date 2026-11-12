@@ -5,6 +5,7 @@ import { Download, Check, Network, ArrowRight } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { useProject } from "@/components/layout/project-context";
 import { createClient } from "@/lib/supabase/client";
+import { getProjectMembersAction } from "@/app/actions/projects";
 
 export default function TraceabilityPage() {
   const { activeProject } = useProject();
@@ -19,31 +20,40 @@ export default function TraceabilityPage() {
     if (!activeProject?.id) return;
 
     try {
-      // 1. Buscar stakeholders/perfis
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("id, full_name");
+      // 1. Buscar APENAS stakeholders membros cadastrados no projeto ativo
+      const membersRes = await getProjectMembersAction(activeProject.id);
+      let projectMembers = [];
 
-      if (profilesData && profilesData.length > 0) {
-        setStakeholders(
-          profilesData.map((p) => ({
-            id: p.id,
-            name: p.full_name?.split(" ")[0] || "Membro",
-          }))
-        );
-      } else {
-        setStakeholders([
-          { id: "stk1", name: "Ana" },
-          { id: "stk2", name: "Carlos" },
-          { id: "stk3", name: "Beatriz" },
-          { id: "stk4", name: "Diego" },
-        ]);
+      if (membersRes?.success && membersRes.data?.length > 0) {
+        projectMembers = membersRes.data
+          .map((m) => {
+            const prof = m.profiles || {};
+            const id = prof.id || m.user_id;
+            const fullName = prof.full_name || "Membro";
+            return {
+              id,
+              name: fullName.length > 15 ? fullName.split(" ")[0] : fullName,
+              fullName,
+              role: m.role_in_project,
+            };
+          })
+          .filter((s) => Boolean(s.id));
+      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
+        // Fallback demo apenas para o projeto mock inicial
+        projectMembers = [
+          { id: "stk1", name: "Ana", fullName: "Ana Ribeiro" },
+          { id: "stk2", name: "Carlos", fullName: "Carlos Mendes" },
+          { id: "stk3", name: "Beatriz", fullName: "Beatriz Souza" },
+          { id: "stk4", name: "Diego", fullName: "Diego Almeida" },
+        ];
       }
 
-      // 2. Buscar Requisitos vinculados ao projeto ativo
+      setStakeholders(projectMembers);
+
+      // 2. Buscar Requisitos vinculados ao projeto ativo (incluindo o responsible_id)
       const { data: linkedReqs } = await supabase
         .from("project_requirements")
-        .select("requirement:requirements(id, code)")
+        .select("requirement:requirements(id, code, responsible_id)")
         .eq("project_id", activeProject.id);
 
       const reqList = (linkedReqs || [])
@@ -61,6 +71,7 @@ export default function TraceabilityPage() {
       if (reqList.length > 0) {
         setRequirements(reqList);
         setUserStories(storiesData || []);
+
         // Buscar vínculos reais de requirement_user_stories
         const reqIds = reqList.map((r) => r.id);
         const { data: linkData } = await supabase
@@ -72,6 +83,14 @@ export default function TraceabilityPage() {
         (linkData || []).forEach((item) => {
           newLinks[`${item.requirement_id}-${item.user_story_id}`] = true;
         });
+
+        // Vincular automaticamente o stakeholder responsável cadastrado no requisito
+        reqList.forEach((r) => {
+          if (r.responsible_id) {
+            newLinks[`${r.id}-${r.responsible_id}`] = true;
+          }
+        });
+
         setLinks(newLinks);
       } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
         // Fallback demo apenas para o projeto mock
@@ -216,13 +235,16 @@ export default function TraceabilityPage() {
                     REQUISITO
                   </th>
                   <th
-                    colSpan={userStories.length}
+                    colSpan={userStories.length || 1}
                     className="py-3 px-4 border-r border-slate-200 dark:border-slate-800 text-blue-700 dark:text-blue-400 bg-blue-50/40 dark:bg-blue-950/40"
                   >
-                    User Stories
+                    User Stories {userStories.length > 0 && `(${userStories.length})`}
                   </th>
-                  <th colSpan={stakeholders.length} className="py-3 px-4 text-slate-700 dark:text-slate-300">
-                    Stakeholders
+                  <th
+                    colSpan={stakeholders.length || 1}
+                    className="py-3 px-4 text-slate-700 dark:text-slate-300"
+                  >
+                    Stakeholders do Projeto {stakeholders.length > 0 && `(${stakeholders.length})`}
                   </th>
                 </tr>
 
@@ -231,22 +253,36 @@ export default function TraceabilityPage() {
                   <th className="py-2.5 px-4 text-left border-r border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
                     ID
                   </th>
-                  {userStories.map((us) => (
-                    <th
-                      key={us.id}
-                      className="py-2.5 px-4 font-semibold text-slate-700 dark:text-slate-300 min-w-[70px] border-r border-slate-100 dark:border-slate-800"
-                    >
-                      {us.code}
+                  {userStories.length > 0 ? (
+                    userStories.map((us) => (
+                      <th
+                        key={us.id}
+                        className="py-2.5 px-4 font-semibold text-slate-700 dark:text-slate-300 min-w-[70px] border-r border-slate-100 dark:border-slate-800"
+                      >
+                        {us.code}
+                      </th>
+                    ))
+                  ) : (
+                    <th className="py-2.5 px-4 font-normal text-slate-400 dark:text-slate-500 text-[11px] italic min-w-[100px] border-r border-slate-100 dark:border-slate-800">
+                      Nenhuma User Story
                     </th>
-                  ))}
-                  {stakeholders.map((stk) => (
-                    <th
-                      key={stk.id}
-                      className="py-2.5 px-4 font-semibold text-slate-700 dark:text-slate-300 min-w-[80px] border-r border-slate-100 dark:border-slate-800 last:border-r-0"
-                    >
-                      {stk.name}
+                  )}
+
+                  {stakeholders.length > 0 ? (
+                    stakeholders.map((stk) => (
+                      <th
+                        key={stk.id}
+                        title={stk.fullName}
+                        className="py-2.5 px-4 font-semibold text-slate-700 dark:text-slate-300 min-w-[80px] border-r border-slate-100 dark:border-slate-800 last:border-r-0"
+                      >
+                        {stk.name}
+                      </th>
+                    ))
+                  ) : (
+                    <th className="py-2.5 px-4 font-normal text-slate-400 dark:text-slate-500 text-[11px] italic min-w-[120px]">
+                      Nenhum stakeholder vinculado
                     </th>
-                  ))}
+                  )}
                 </tr>
               </thead>
 
@@ -259,48 +295,60 @@ export default function TraceabilityPage() {
                     </td>
 
                     {/* Colunas de User Stories */}
-                    {userStories.map((us) => {
-                      const isLinked = links[`${req.id}-${us.id}`];
-                      return (
-                        <td
-                          key={us.id}
-                          onClick={() => toggleLink(req.id, us.id)}
-                          className={`py-3 px-4 cursor-pointer transition-colors border-r border-slate-100 dark:border-slate-800 ${
-                            isLinked
-                              ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
-                              : "bg-rose-50/20 dark:bg-slate-900/30 text-transparent hover:bg-slate-100 dark:hover:bg-slate-800"
-                          }`}
-                        >
-                          {isLinked ? (
-                            <Check className="w-4 h-4 mx-auto stroke-[2.5]" />
-                          ) : (
-                            <span className="inline-block w-4 h-4" />
-                          )}
-                        </td>
-                      );
-                    })}
+                    {userStories.length > 0 ? (
+                      userStories.map((us) => {
+                        const isLinked = links[`${req.id}-${us.id}`];
+                        return (
+                          <td
+                            key={us.id}
+                            onClick={() => toggleLink(req.id, us.id)}
+                            className={`py-3 px-4 cursor-pointer transition-colors border-r border-slate-100 dark:border-slate-800 ${
+                              isLinked
+                                ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                                : "bg-rose-50/20 dark:bg-slate-900/30 text-transparent hover:bg-slate-100 dark:hover:bg-slate-800"
+                            }`}
+                          >
+                            {isLinked ? (
+                              <Check className="w-4 h-4 mx-auto stroke-[2.5]" />
+                            ) : (
+                              <span className="inline-block w-4 h-4" />
+                            )}
+                          </td>
+                        );
+                      })
+                    ) : (
+                      <td className="py-3 px-4 text-slate-400 dark:text-slate-600 text-xs border-r border-slate-100 dark:border-slate-800">
+                        -
+                      </td>
+                    )}
 
                     {/* Colunas de Stakeholders */}
-                    {stakeholders.map((stk) => {
-                      const isLinked = links[`${req.id}-${stk.id}`];
-                      return (
-                        <td
-                          key={stk.id}
-                          onClick={() => toggleLink(req.id, stk.id)}
-                          className={`py-3 px-4 cursor-pointer transition-colors border-r border-slate-100 dark:border-slate-800 last:border-r-0 ${
-                            isLinked
-                              ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
-                              : "bg-rose-50/20 dark:bg-slate-900/30 text-transparent hover:bg-slate-100 dark:hover:bg-slate-800"
-                          }`}
-                        >
-                          {isLinked ? (
-                            <Check className="w-4 h-4 mx-auto stroke-[2.5]" />
-                          ) : (
-                            <span className="inline-block w-4 h-4" />
-                          )}
-                        </td>
-                      );
-                    })}
+                    {stakeholders.length > 0 ? (
+                      stakeholders.map((stk) => {
+                        const isLinked = links[`${req.id}-${stk.id}`];
+                        return (
+                          <td
+                            key={stk.id}
+                            onClick={() => toggleLink(req.id, stk.id)}
+                            className={`py-3 px-4 cursor-pointer transition-colors border-r border-slate-100 dark:border-slate-800 last:border-r-0 ${
+                              isLinked
+                                ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                                : "bg-rose-50/20 dark:bg-slate-900/30 text-transparent hover:bg-slate-100 dark:hover:bg-slate-800"
+                            }`}
+                          >
+                            {isLinked ? (
+                              <Check className="w-4 h-4 mx-auto stroke-[2.5]" />
+                            ) : (
+                              <span className="inline-block w-4 h-4" />
+                            )}
+                          </td>
+                        );
+                      })
+                    ) : (
+                      <td className="py-3 px-4 text-slate-400 dark:text-slate-600 text-xs">
+                        -
+                      </td>
+                    )}
                   </tr>
                 ))}
 
@@ -309,16 +357,29 @@ export default function TraceabilityPage() {
                   <td className="py-3.5 px-4 text-left font-bold text-slate-700 dark:text-slate-300 uppercase text-[11px] tracking-wider border-r border-slate-200 dark:border-slate-800">
                     COBERTURA
                   </td>
-                  {userStories.map((us) => (
-                    <td key={us.id} className="py-3.5 px-4 text-amber-600 dark:text-amber-400 font-bold border-r border-slate-200 dark:border-slate-800">
-                      {getCoverage(us.id)}
+                  {userStories.length > 0 ? (
+                    userStories.map((us) => (
+                      <td key={us.id} className="py-3.5 px-4 text-amber-600 dark:text-amber-400 font-bold border-r border-slate-200 dark:border-slate-800">
+                        {getCoverage(us.id)}
+                      </td>
+                    ))
+                  ) : (
+                    <td className="py-3.5 px-4 text-slate-400 dark:text-slate-600 text-xs border-r border-slate-200 dark:border-slate-800">
+                      -
                     </td>
-                  ))}
-                  {stakeholders.map((stk) => (
-                    <td key={stk.id} className="py-3.5 px-4 text-emerald-600 dark:text-emerald-400 font-bold border-r border-slate-200 dark:border-slate-800 last:border-r-0">
-                      {getCoverage(stk.id)}
+                  )}
+
+                  {stakeholders.length > 0 ? (
+                    stakeholders.map((stk) => (
+                      <td key={stk.id} className="py-3.5 px-4 text-emerald-600 dark:text-emerald-400 font-bold border-r border-slate-200 dark:border-slate-800 last:border-r-0">
+                        {getCoverage(stk.id)}
+                      </td>
+                    ))
+                  ) : (
+                    <td className="py-3.5 px-4 text-slate-400 dark:text-slate-600 text-xs">
+                      -
                     </td>
-                  ))}
+                  )}
                 </tr>
               </tbody>
             </table>

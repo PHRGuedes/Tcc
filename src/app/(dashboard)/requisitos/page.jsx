@@ -7,6 +7,7 @@ import { TypeBadge, PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { RequirementModal } from "@/components/modules/requirements/requirement-modal";
 import { useProject } from "@/components/layout/project-context";
 import { createClient } from "@/lib/supabase/client";
+import { getProjectMembersAction } from "@/app/actions/projects";
 import {
   PRIORITIES,
   PRIORITY_LABELS,
@@ -38,18 +39,27 @@ export default function RequirementsPage() {
     if (!activeProject?.id) return;
     setLoading(true);
     try {
-      // 1. Buscar stakeholders/perfis
-      const { data: profilesData } = await supabase
-        .from("profiles")
-        .select("id, full_name, role, email");
+      // 1. Buscar APENAS stakeholders membros cadastrados no projeto ativo
+      const membersRes = await getProjectMembersAction(activeProject.id);
+      let projectMembers = [];
 
-      const defaultStakeholders = [
-        { id: "11111111-1111-1111-1111-111111111111", full_name: "Ana Ribeiro" },
-        { id: "22222222-2222-2222-2222-222222222222", full_name: "Carlos Mendes" },
-        { id: "33333333-3333-3333-3333-333333333333", full_name: "Diego Almeida" },
-        { id: "44444444-4444-4444-4444-444444444444", full_name: "Beatriz Souza" },
-      ];
-      setStakeholders(profilesData?.length ? profilesData : defaultStakeholders);
+      if (membersRes?.success && membersRes.data?.length > 0) {
+        projectMembers = membersRes.data.map((m) => ({
+          id: m.profiles?.id || m.user_id,
+          full_name: m.profiles?.full_name || "Membro da Equipe",
+          role: m.role_in_project || m.profiles?.role,
+          email: m.profiles?.email,
+        }));
+      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
+        projectMembers = [
+          { id: "11111111-1111-1111-1111-111111111111", full_name: "Ana Ribeiro" },
+          { id: "22222222-2222-2222-2222-222222222222", full_name: "Carlos Mendes" },
+          { id: "33333333-3333-3333-3333-333333333333", full_name: "Diego Almeida" },
+          { id: "44444444-4444-4444-4444-444444444444", full_name: "Beatriz Souza" },
+        ];
+      }
+
+      setStakeholders(projectMembers);
 
       // 2. Buscar User Stories DO PROJETO ATIVO
       const { data: usData } = await supabase
