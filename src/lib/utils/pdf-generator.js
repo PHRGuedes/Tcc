@@ -404,7 +404,7 @@ export function generateProjectReportPDF({
       return [
         us.code || "US-00",
         us.title || "Sem título",
-        narrativa,
+        narrative,
         priorityLabel,
         statusLabel,
       ];
@@ -480,3 +480,4 @@ export function generateProjectReportPDF({
 
   return true;
 }
+
