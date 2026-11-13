@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { X, History, Send, AlertTriangle, Globe, FolderKanban } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -18,20 +18,24 @@ import {
   updateRequirementAction,
 } from "@/app/actions/requirements";
 
+const EMPTY_ARRAY = [];
+
 export function RequirementModal({
   isOpen,
   onClose,
   requirement = null,
   onSaveSuccess,
-  userStories = [],
-  stakeholders = [],
+  userStories = EMPTY_ARRAY,
+  stakeholders = EMPTY_ARRAY,
   scope = "project", // 'project' | 'global'
 }) {
   const { profile } = useAuth();
   const { activeProject } = useProject();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const isEditing = Boolean(requirement?.id);
+  const requirementId = requirement?.id;
+  const profileName = profile?.full_name;
 
   const [formData, setFormData] = useState({
     code: "REQ-001",
@@ -57,6 +61,8 @@ export function RequirementModal({
   }, []);
 
   useEffect(() => {
+    if (!isOpen) return;
+
     if (requirement) {
       setFormData({
         code: requirement.code || "REQ-001",
@@ -127,7 +133,7 @@ export function RequirementModal({
       setVersions([
         {
           version: "v1",
-          author: profile?.full_name || "Você",
+          author: profileName || "Você",
           date: "Agora mesmo",
           comment:
             scope === "global"
@@ -136,7 +142,8 @@ export function RequirementModal({
         },
       ]);
     }
-  }, [requirement, isOpen, profile, userStories, stakeholders, scope, supabase]);
+    setErrorMsg("");
+  }, [isOpen, requirementId, scope]);
 
   if (!isOpen) return null;
 
