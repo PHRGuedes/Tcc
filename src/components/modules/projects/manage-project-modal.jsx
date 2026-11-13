@@ -18,11 +18,11 @@ import {
   Target,
   Sparkles,
   Briefcase,
+  Mail,
 } from "lucide-react";
 import { useProject } from "@/components/layout/project-context";
 import {
   getProjectMembersAction,
-  getAvailableProfilesAction,
   addProjectMemberAction,
   updateProjectMemberRoleAction,
   removeProjectMemberAction,
@@ -95,17 +95,16 @@ export function ManageProjectModal({ isOpen, onClose }) {
 
   // Estado da aba Stakeholders
   const [members, setMembers] = useState([]);
-  const [availableProfiles, setAvailableProfiles] = useState([]);
   const [creatorId, setCreatorId] = useState(activeProject?.created_by || null);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
-  const [selectedProfileId, setSelectedProfileId] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
   const [selectedRole, setSelectedRole] = useState("developer");
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [stakeholderError, setStakeholderError] = useState("");
   const [stakeholderSuccess, setStakeholderSuccess] = useState("");
   const [actionInProgressId, setActionInProgressId] = useState(null);
 
-  // Carrega membros e perfis de forma assíncrona desacoplada do ciclo síncrono do effect
+  // Carrega membros do projeto de forma assíncrona
   useEffect(() => {
     let ignore = false;
     if (!isOpen || activeTab !== "stakeholders" || !activeProject?.id) return;
@@ -116,10 +115,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
       setStakeholderError("");
 
       try {
-        const [membersRes, profilesRes] = await Promise.all([
-          getProjectMembersAction(activeProject.id),
-          getAvailableProfilesAction(),
-        ]);
+        const membersRes = await getProjectMembersAction(activeProject.id);
 
         if (!ignore) {
           if (membersRes.success) {
@@ -129,10 +125,6 @@ export function ManageProjectModal({ isOpen, onClose }) {
             }
           } else {
             setStakeholderError(membersRes.error || "Não foi possível carregar os membros.");
-          }
-
-          if (profilesRes.success) {
-            setAvailableProfiles(profilesRes.data);
           }
         }
       } catch (err) {
@@ -189,11 +181,11 @@ export function ManageProjectModal({ isOpen, onClose }) {
     }
   };
 
-  // Handler para adicionar novo stakeholder
+  // Handler para adicionar novo stakeholder via e-mail
   const handleAddMember = async (e) => {
     e.preventDefault();
-    if (!selectedProfileId) {
-      setStakeholderError("Selecione um usuário para vincular ao projeto.");
+    if (!memberEmail.trim()) {
+      setStakeholderError("Digite o e-mail do usuário para vincular ao projeto.");
       return;
     }
 
@@ -204,7 +196,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
     try {
       const res = await addProjectMemberAction({
         projectId: activeProject.id,
-        userId: selectedProfileId,
+        email: memberEmail.trim(),
         roleInProject: selectedRole,
       });
 
@@ -214,10 +206,12 @@ export function ManageProjectModal({ isOpen, onClose }) {
       }
 
       setMembers((prev) => [...prev, res.data]);
-      setSelectedProfileId("");
+      setMemberEmail("");
       setSelectedRole("developer");
-      setStakeholderSuccess("Stakeholder adicionado com sucesso!");
-      setTimeout(() => setStakeholderSuccess(""), 3000);
+      setStakeholderSuccess(
+        `${res.data?.profiles?.full_name || "Stakeholder"} vinculado com sucesso!`
+      );
+      setTimeout(() => setStakeholderSuccess(""), 4000);
     } catch (err) {
       console.error("Erro ao adicionar stakeholder:", err);
       setStakeholderError("Erro inesperado ao adicionar o usuário.");
@@ -285,11 +279,6 @@ export function ManageProjectModal({ isOpen, onClose }) {
       setActionInProgressId(null);
     }
   };
-
-  // Usuários disponíveis que ainda NÃO são membros do projeto atual
-  const unassignedProfiles = availableProfiles.filter(
-    (profile) => !members.some((m) => m.user_id === profile.id)
-  );
 
   const modalContent = (
     <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-[100] p-4 overflow-y-auto animate-in fade-in duration-150">
@@ -493,26 +482,27 @@ export function ManageProjectModal({ isOpen, onClose }) {
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  {/* Selecionar Usuário */}
+                  {/* Digitar E-mail do Usuário */}
                   <div className="sm:col-span-6">
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Usuário do Sistema
+                      E-mail do Usuário
                     </label>
-                    <select
-                      value={selectedProfileId}
-                      onChange={(e) => setSelectedProfileId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
-                    >
-                      <option value="">Selecione um usuário...</option>
-                      {unassignedProfiles.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.full_name} ({p.email})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500 pointer-events-none">
+                        <Mail className="w-3.5 h-3.5" />
+                      </span>
+                      <input
+                        type="email"
+                        required
+                        placeholder="ex: usuario@reqflow.com"
+                        value={memberEmail}
+                        onChange={(e) => setMemberEmail(e.target.value)}
+                        className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs transition-all"
+                      />
+                    </div>
                   </div>
 
-                  {/* Selecionar Função / Perfil (Apenas adm ou desenvolvedor) */}
+                  {/* Selecionar Função / Perfil */}
                   <div className="sm:col-span-4">
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       Perfil no Projeto
@@ -520,7 +510,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
                     <select
                       value={selectedRole}
                       onChange={(e) => setSelectedRole(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer"
                     >
                       {ALLOWED_PROJECT_ROLES.map((r) => (
                         <option key={r.id} value={r.id}>
@@ -534,7 +524,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
                   <div className="sm:col-span-2">
                     <button
                       type="submit"
-                      disabled={isAddingMember || !selectedProfileId}
+                      disabled={isAddingMember || !memberEmail.trim()}
                       className="w-full py-2 px-3 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                     >
                       {isAddingMember ? (

@@ -280,9 +280,10 @@ const PROJECT_ROLE_LABELS = {
 };
 
 /**
- * Server Action para adicionar um stakeholder ao projeto
+ * Server Action para adicionar um stakeholder ao projeto por e-mail ou userId.
+ * Garante que ninguém possa listar todos os usuários do sistema, exigindo a digitação do e-mail.
  */
-export async function addProjectMemberAction({ projectId, userId, roleInProject }) {
+export async function addProjectMemberAction({ projectId, email, userId, roleInProject }) {
   try {
     const supabase = await createClient();
     const {
@@ -294,8 +295,46 @@ export async function addProjectMemberAction({ projectId, userId, roleInProject 
       return { success: false, error: "Usuário não autenticado." };
     }
 
-    if (!projectId || !userId) {
-      return { success: false, error: "Projeto e usuário são obrigatórios." };
+    if (!projectId || (!email && !userId)) {
+      return { success: false, error: "Projeto e e-mail do usuário são obrigatórios." };
+    }
+
+    let targetUserId = userId;
+    let targetProfileName = "";
+
+    // Se informado por e-mail, busca o usuário pontualmente pelo e-mail sem expor os demais usuários
+    if (email) {
+      const normalizedEmail = email.trim().toLowerCase();
+      const { data: foundProfile, error: profileErr } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .ilike("email", normalizedEmail)
+        .maybeSingle();
+
+      if (profileErr || !foundProfile) {
+        return {
+          success: false,
+          error: `Nenhum usuário cadastrado no sistema com o e-mail "${normalizedEmail}".`,
+        };
+      }
+
+      targetUserId = foundProfile.id;
+      targetProfileName = foundProfile.full_name;
+    }
+
+    // Verificar se já é membro do projeto
+    const { data: existingMember } = await supabase
+      .from("project_members")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("user_id", targetUserId)
+      .maybeSingle();
+
+    if (existingMember) {
+      return {
+        success: false,
+        error: `Este usuário ${targetProfileName ? `(${targetProfileName}) ` : ""}já é stakeholder deste projeto.`,
+      };
     }
 
     const role = VALID_PROJECT_ROLES.includes(roleInProject) ? roleInProject : "developer";
@@ -304,7 +343,7 @@ export async function addProjectMemberAction({ projectId, userId, roleInProject 
       .from("project_members")
       .insert({
         project_id: projectId,
-        user_id: userId,
+        user_id: targetUserId,
         role_in_project: role,
       })
       .select(`
@@ -341,7 +380,7 @@ export async function addProjectMemberAction({ projectId, userId, roleInProject 
         entity_type: "project_member",
         entity_id: data.id,
         action: "created",
-        description: `adicionou ${data.profiles?.full_name || "o membro"} como ${PROJECT_ROLE_LABELS[role] || role}`,
+        description: `adicionou ${data.profiles?.full_name || email} como ${PROJECT_ROLE_LABELS[role] || role}`,
       });
     } catch (auditErr) {
       console.warn("Aviso ao registrar auditoria de membro:", auditErr);
