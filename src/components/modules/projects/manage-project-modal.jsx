@@ -19,11 +19,16 @@ import {
   Sparkles,
   Briefcase,
   Mail,
+  Send,
+  Clock,
 } from "lucide-react";
 import { useProject } from "@/components/layout/project-context";
+import { useAuth } from "@/hooks/use-auth";
 import {
   getProjectMembersAction,
-  addProjectMemberAction,
+  getProjectInvitationsAction,
+  inviteProjectMemberAction,
+  cancelProjectInvitationAction,
   updateProjectMemberRoleAction,
   removeProjectMemberAction,
 } from "@/app/actions/projects";
@@ -76,6 +81,7 @@ export const ALLOWED_PROJECT_ROLES = [
 ];
 
 export function ManageProjectModal({ isOpen, onClose }) {
+  const { user } = useAuth();
   const { activeProject, updateProject } = useProject();
 
   const [mounted, setMounted] = useState(false);
@@ -95,6 +101,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
 
   // Estado da aba Stakeholders
   const [members, setMembers] = useState([]);
+  const [pendingInvites, setPendingInvites] = useState([]);
   const [creatorId, setCreatorId] = useState(activeProject?.created_by || null);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [memberEmail, setMemberEmail] = useState("");
@@ -104,7 +111,13 @@ export function ManageProjectModal({ isOpen, onClose }) {
   const [stakeholderSuccess, setStakeholderSuccess] = useState("");
   const [actionInProgressId, setActionInProgressId] = useState(null);
 
-  // Carrega membros do projeto de forma assíncrona
+  const isCurrentUserAdmin = Boolean(
+    creatorId === user?.id ||
+      activeProject?.created_by === user?.id ||
+      members.some((m) => m.user_id === user?.id && m.role_in_project === "admin")
+  );
+
+  // Carrega membros e convites pendentes do projeto
   useEffect(() => {
     let ignore = false;
     if (!isOpen || activeTab !== "stakeholders" || !activeProject?.id) return;
@@ -115,16 +128,23 @@ export function ManageProjectModal({ isOpen, onClose }) {
       setStakeholderError("");
 
       try {
-        const membersRes = await getProjectMembersAction(activeProject.id);
+        const [membersRes, invitesRes] = await Promise.all([
+          getProjectMembersAction(activeProject.id),
+          getProjectInvitationsAction(activeProject.id),
+        ]);
 
         if (!ignore) {
           if (membersRes.success) {
-            setMembers(membersRes.data);
+            setMembers(membersRes.data || []);
             if (membersRes.projectCreatorId) {
               setCreatorId(membersRes.projectCreatorId);
             }
           } else {
             setStakeholderError(membersRes.error || "Não foi possível carregar os membros.");
+          }
+
+          if (invitesRes.success) {
+            setPendingInvites(invitesRes.data || []);
           }
         }
       } catch (err) {
@@ -181,11 +201,11 @@ export function ManageProjectModal({ isOpen, onClose }) {
     }
   };
 
-  // Handler para adicionar novo stakeholder via e-mail
+  // Handler para convidar novo stakeholder via e-mail
   const handleAddMember = async (e) => {
     e.preventDefault();
     if (!memberEmail.trim()) {
-      setStakeholderError("Digite o e-mail do usuário para vincular ao projeto.");
+      setStakeholderError("Digite o e-mail do usuário para enviar o convite.");
       return;
     }
 
@@ -194,29 +214,62 @@ export function ManageProjectModal({ isOpen, onClose }) {
     setStakeholderSuccess("");
 
     try {
-      const res = await addProjectMemberAction({
+      const res = await inviteProjectMemberAction({
         projectId: activeProject.id,
         email: memberEmail.trim(),
         roleInProject: selectedRole,
       });
 
       if (!res.success) {
-        setStakeholderError(res.error || "Falha ao adicionar stakeholder.");
+        setStakeholderError(res.error || "Falha ao enviar convite.");
         return;
       }
 
-      setMembers((prev) => [...prev, res.data]);
-      setMemberEmail("");
-      setSelectedRole("developer");
-      setStakeholderSuccess(
-        `${res.data?.profiles?.full_name || "Stakeholder"} vinculado com sucesso!`
-      );
+      if (res.data?.status === "pending") {
+        setPendingInvites((prev) => [res.data, ...prev]);
+        setMemberEmail("");
+        setSelectedRole("developer");
+        setStakeholderSuccess(res.message || "Convite enviado com sucesso!");
+      } else {
+        // Inserção direta (fallback)
+        if (res.data) setMembers((prev) => [...prev, res.data]);
+        setMemberEmail("");
+        setSelectedRole("developer");
+        setStakeholderSuccess(res.message || "Stakeholder adicionado com sucesso!");
+      }
       setTimeout(() => setStakeholderSuccess(""), 4000);
     } catch (err) {
-      console.error("Erro ao adicionar stakeholder:", err);
-      setStakeholderError("Erro inesperado ao adicionar o usuário.");
+      console.error("Erro ao convidar stakeholder:", err);
+      setStakeholderError("Erro inesperado ao enviar o convite.");
     } finally {
       setIsAddingMember(false);
+    }
+  };
+
+  // Handler para cancelar convite pendente
+  const handleCancelInvite = async (inviteId) => {
+    setActionInProgressId(inviteId);
+    setStakeholderError("");
+
+    try {
+      const res = await cancelProjectInvitationAction({
+        invitationId: inviteId,
+        projectId: activeProject.id,
+      });
+
+      if (!res.success) {
+        setStakeholderError(res.error || "Falha ao cancelar convite.");
+        return;
+      }
+
+      setPendingInvites((prev) => prev.filter((inv) => inv.id !== inviteId));
+      setStakeholderSuccess("Convite cancelado com sucesso.");
+      setTimeout(() => setStakeholderSuccess(""), 3000);
+    } catch (err) {
+      console.error("Erro ao cancelar convite:", err);
+      setStakeholderError("Erro ao cancelar convite.");
+    } finally {
+      setActionInProgressId(null);
     }
   };
 
@@ -471,74 +524,150 @@ export function ManageProjectModal({ isOpen, onClose }) {
                 </p>
               </div>
 
-              {/* Formulário: Vincular Novo Stakeholder */}
-              <form
-                onSubmit={handleAddMember}
-                className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 space-y-3"
-              >
-                <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
-                  <UserPlus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  <span>Adicionar Stakeholder ao Projeto</span>
-                </h4>
+              {/* Formulário: Convidar Novo Stakeholder */}
+              {isCurrentUserAdmin ? (
+                <form
+                  onSubmit={handleAddMember}
+                  className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/40 space-y-3"
+                >
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                    <UserPlus className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    <span>Convidar Stakeholder para o Projeto</span>
+                  </h4>
 
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  {/* Digitar E-mail do Usuário */}
-                  <div className="sm:col-span-6">
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      E-mail do Usuário
-                    </label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500 pointer-events-none">
-                        <Mail className="w-3.5 h-3.5" />
-                      </span>
-                      <input
-                        type="email"
-                        required
-                        placeholder="ex: usuario@reqflow.com"
-                        value={memberEmail}
-                        onChange={(e) => setMemberEmail(e.target.value)}
-                        className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs transition-all"
-                      />
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                    {/* Digitar E-mail do Usuário */}
+                    <div className="sm:col-span-6">
+                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        E-mail do Usuário
+                      </label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 dark:text-slate-500 pointer-events-none">
+                          <Mail className="w-3.5 h-3.5" />
+                        </span>
+                        <input
+                          type="email"
+                          required
+                          placeholder="ex: usuario@reqflow.com"
+                          value={memberEmail}
+                          onChange={(e) => setMemberEmail(e.target.value)}
+                          className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Selecionar Função / Perfil */}
+                    <div className="sm:col-span-4">
+                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Perfil no Projeto
+                      </label>
+                      <select
+                        value={selectedRole}
+                        onChange={(e) => setSelectedRole(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer"
+                      >
+                        {ALLOWED_PROJECT_ROLES.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Botão Enviar Convite */}
+                    <div className="sm:col-span-2">
+                      <button
+                        type="submit"
+                        disabled={isAddingMember || !memberEmail.trim()}
+                        className="w-full py-2 px-3 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                      >
+                        {isAddingMember ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Convidar</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
+                </form>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+                  Apenas administradores do projeto possuem permissão para convidar novos membros ou alterar perfis.
+                </div>
+              )}
 
-                  {/* Selecionar Função / Perfil */}
-                  <div className="sm:col-span-4">
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      Perfil no Projeto
-                    </label>
-                    <select
-                      value={selectedRole}
-                      onChange={(e) => setSelectedRole(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer"
-                    >
-                      {ALLOWED_PROJECT_ROLES.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.label}
-                        </option>
-                      ))}
-                    </select>
+              {/* Seção de Convites Pendentes */}
+              {pendingInvites.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Convites Enviados Pendentes ({pendingInvites.length})</span>
+                    </h4>
                   </div>
+                  <div className="border border-amber-200/70 dark:border-amber-900/40 bg-amber-50/20 dark:bg-amber-950/10 rounded-xl divide-y divide-amber-100/70 dark:divide-amber-900/30 overflow-hidden shadow-2xs">
+                    {pendingInvites.map((invite) => {
+                      const invProfile = invite.profiles || {};
+                      const isActing = actionInProgressId === invite.id;
+                      const roleConfig =
+                        ALLOWED_PROJECT_ROLES.find((r) => r.id === invite.role_in_project) || {
+                          label: invite.role_in_project,
+                        };
 
-                  {/* Botão Adicionar */}
-                  <div className="sm:col-span-2">
-                    <button
-                      type="submit"
-                      disabled={isAddingMember || !memberEmail.trim()}
-                      className="w-full py-2 px-3 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                    >
-                      {isAddingMember ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <>
-                          <UserPlus className="w-3.5 h-3.5" />
-                          <span>Adicionar</span>
-                        </>
-                      )}
-                    </button>
+                      return (
+                        <div
+                          key={invite.id}
+                          className="p-3 flex items-center justify-between gap-3 text-xs hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition-colors"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0">
+                              <Mail className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                  {invProfile.full_name || invProfile.email || "Usuário convidado"}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100/80 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300">
+                                  {roleConfig.label}
+                                </span>
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                  Aguardando aceite
+                                </span>
+                              </div>
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                                {invProfile.email || "Convite por e-mail"}
+                              </span>
+                            </div>
+                          </div>
+
+                          {isCurrentUserAdmin && (
+                            <button
+                              type="button"
+                              disabled={isActing}
+                              onClick={() => handleCancelInvite(invite.id)}
+                              className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 px-2 py-1 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1 font-medium"
+                              title="Cancelar este convite"
+                            >
+                              {isActing ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <>
+                                  <X className="w-3.5 h-3.5" />
+                                  <span>Cancelar</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              </form>
+              )}
 
               {/* Lista dos Stakeholders Atuais do Projeto */}
               <div className="space-y-3">
@@ -570,6 +699,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
                       const isActing = actionInProgressId === member.id;
                       const isCreator =
                         member.user_id === (creatorId || activeProject?.created_by);
+                      const isSelf = member.user_id === user?.id;
                       const roleConfig =
                         ALLOWED_PROJECT_ROLES.find((r) => r.id === member.role_in_project) || {
                           id: member.role_in_project,
@@ -605,6 +735,11 @@ export function ManageProjectModal({ isOpen, onClose }) {
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">
                                   {profile.full_name || "Membro da Equipe"}
+                                  {isSelf && (
+                                    <span className="ml-1 text-[11px] font-normal text-slate-500">
+                                      (Você)
+                                    </span>
+                                  )}
                                 </span>
                                 {isCreator ? (
                                   <span className="px-2 py-0.5 rounded-md text-[10px] font-bold border bg-blue-50 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800/50">
@@ -628,13 +763,17 @@ export function ManageProjectModal({ isOpen, onClose }) {
                           <div className="flex items-center gap-2 self-end sm:self-center">
                             {/* Seletor Rápido de Perfil */}
                             <select
-                              disabled={isActing || isCreator}
+                              disabled={isActing || isCreator || isSelf || !isCurrentUserAdmin}
                               value={member.role_in_project || "developer"}
                               onChange={(e) => handleRoleChange(member.id, e.target.value)}
-                              className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-[#131c31] hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs transition-all cursor-pointer disabled:opacity-60 disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                              className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-[#131c31] hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs transition-all cursor-pointer disabled:opacity-60 disabled:bg-slate-100 dark:disabled:bg-slate-800/60"
                               title={
                                 isCreator
                                   ? "O criador do projeto deve permanecer sempre como Administrador"
+                                  : isSelf
+                                  ? "Você não pode alterar sua própria função no projeto"
+                                  : !isCurrentUserAdmin
+                                  ? "Apenas administradores podem alterar funções de stakeholders"
                                   : "Alterar perfil do stakeholder no projeto"
                               }
                             >
@@ -645,8 +784,8 @@ export function ManageProjectModal({ isOpen, onClose }) {
                               ))}
                             </select>
 
-                            {/* Botão Remover (Desabilitado para o criador do projeto) */}
-                            {!isCreator && (
+                            {/* Botão Remover (Desabilitado para o criador, para si mesmo ou se não for admin) */}
+                            {!isCreator && !isSelf && isCurrentUserAdmin && (
                               <button
                                 type="button"
                                 disabled={isActing}
