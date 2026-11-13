@@ -16,6 +16,63 @@ function isMissingColumnError(error) {
 }
 
 /**
+ * Busca os Requisitos Globais da Biblioteca Pessoal do usuário autenticado.
+ * Garante estritamente que APENAS os requisitos criados pelo usuário atual sejam retornados.
+ */
+export async function getGlobalRequirementsAction() {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado.", data: [] };
+    }
+
+    // 1. Tentar buscar requisitos onde project_id IS NULL pertencentes estritamente ao user.id
+    try {
+      const { data: globalReqs, error: globalErr } = await supabase
+        .from("requirements")
+        .select("*")
+        .is("project_id", null)
+        .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
+        .order("code", { ascending: true });
+
+      if (!globalErr && globalReqs) {
+        return { success: true, data: globalReqs };
+      }
+    } catch {}
+
+    // 2. Fallback caso a coluna project_id ou user_id ainda não exista no schema cache do Supabase
+    try {
+      const { data: allUserReqs, error: userErr } = await supabase
+        .from("requirements")
+        .select("*")
+        .eq("created_by", user.id)
+        .order("code", { ascending: true });
+
+      if (!userErr && allUserReqs && allUserReqs.length > 0) {
+        const { data: linked } = await supabase
+          .from("project_requirements")
+          .select("requirement_id");
+        const linkedSet = new Set((linked || []).map((l) => l.requirement_id));
+        const filtered = allUserReqs.filter(
+          (r) => !linkedSet.has(r.id) || r.source?.includes("Biblioteca")
+        );
+        return { success: true, data: filtered };
+      }
+    } catch {}
+
+    return { success: true, data: [] };
+  } catch (err) {
+    console.error("Erro inesperado em getGlobalRequirementsAction:", err);
+    return { success: false, error: "Erro interno ao buscar requisitos globais.", data: [] };
+  }
+}
+
+/**
  * Criação de Requisito com suporte a Scope (Project ou Global)
  * - scope === 'global': Biblioteca Pessoal (project_id = null, status = null)
  * - scope === 'project': Requisito ativo do projeto (project_id obrigatório, status obrigatório)

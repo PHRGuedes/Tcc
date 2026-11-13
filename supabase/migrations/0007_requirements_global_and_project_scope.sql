@@ -49,6 +49,10 @@ WHERE project_id IS NULL;
 -- 7. Atualizar Políticas de RLS
 ALTER TABLE public.requirements ENABLE ROW LEVEL SECURITY;
 
+-- Remover TODAS as políticas legadas da tabela requirements
+DROP POLICY IF EXISTS "Leitura de requisitos permitida para usuários autenticados" ON public.requirements;
+DROP POLICY IF EXISTS "Inserção de requisitos para analistas, POs e admins" ON public.requirements;
+DROP POLICY IF EXISTS "Edição de requisitos permitida com RLS" ON public.requirements;
 DROP POLICY IF EXISTS "requirements_select" ON public.requirements;
 DROP POLICY IF EXISTS "requirements_insert" ON public.requirements;
 DROP POLICY IF EXISTS "requirements_update" ON public.requirements;
@@ -56,42 +60,115 @@ DROP POLICY IF EXISTS "requirements_delete" ON public.requirements;
 DROP POLICY IF EXISTS "Gerenciamento de requisitos" ON public.requirements;
 DROP POLICY IF EXISTS "requirements_all" ON public.requirements;
 
--- Leitura:
--- Requisitos de projeto: visíveis para todos os autenticados (ou membros do projeto)
--- Requisitos globais: visíveis estritamente para o criador
+-- SELECT (Leitura):
+-- Requisitos de Projeto: visíveis apenas para membros do projeto (ou admin)
+-- Requisitos Globais (Biblioteca Pessoal): visíveis ESTRITAMENTE para o usuário criador (auth.uid())
 CREATE POLICY "requirements_select"
     ON public.requirements FOR SELECT
     TO authenticated
     USING (
-        (project_id IS NOT NULL)
+        (
+            project_id IS NOT NULL 
+            AND (
+                EXISTS (
+                    SELECT 1 FROM public.project_members pm 
+                    WHERE pm.project_id = requirements.project_id 
+                    AND pm.user_id = auth.uid()
+                )
+                OR get_current_user_role() = 'admin'
+            )
+        )
         OR
-        (project_id IS NULL AND (COALESCE(user_id, created_by) = auth.uid() OR created_by IS NULL))
+        (
+            project_id IS NULL 
+            AND COALESCE(user_id, created_by) = auth.uid()
+        )
     );
 
--- Inserção:
+-- INSERT (Inserção):
 CREATE POLICY "requirements_insert"
     ON public.requirements FOR INSERT
     TO authenticated
-    WITH CHECK (true);
+    WITH CHECK (
+        (
+            project_id IS NOT NULL 
+            AND (
+                EXISTS (
+                    SELECT 1 FROM public.project_members pm 
+                    WHERE pm.project_id = requirements.project_id 
+                    AND pm.user_id = auth.uid()
+                )
+                OR get_current_user_role() = 'admin'
+            )
+        )
+        OR
+        (
+            project_id IS NULL 
+            AND COALESCE(user_id, created_by) = auth.uid()
+        )
+    );
 
--- Atualização:
+-- UPDATE (Atualização):
 CREATE POLICY "requirements_update"
     ON public.requirements FOR UPDATE
     TO authenticated
     USING (
-        (project_id IS NOT NULL)
+        (
+            project_id IS NOT NULL 
+            AND (
+                EXISTS (
+                    SELECT 1 FROM public.project_members pm 
+                    WHERE pm.project_id = requirements.project_id 
+                    AND pm.user_id = auth.uid()
+                )
+                OR get_current_user_role() = 'admin'
+            )
+        )
         OR
-        (project_id IS NULL AND COALESCE(user_id, created_by) = auth.uid())
+        (
+            project_id IS NULL 
+            AND COALESCE(user_id, created_by) = auth.uid()
+        )
     )
-    WITH CHECK (true);
+    WITH CHECK (
+        (
+            project_id IS NOT NULL 
+            AND (
+                EXISTS (
+                    SELECT 1 FROM public.project_members pm 
+                    WHERE pm.project_id = requirements.project_id 
+                    AND pm.user_id = auth.uid()
+                )
+                OR get_current_user_role() = 'admin'
+            )
+        )
+        OR
+        (
+            project_id IS NULL 
+            AND COALESCE(user_id, created_by) = auth.uid()
+        )
+    );
 
--- Exclusão:
+-- DELETE (Exclusão):
 CREATE POLICY "requirements_delete"
     ON public.requirements FOR DELETE
     TO authenticated
     USING (
-        (project_id IS NOT NULL)
+        (
+            project_id IS NOT NULL 
+            AND (
+                EXISTS (
+                    SELECT 1 FROM public.project_members pm 
+                    WHERE pm.project_id = requirements.project_id 
+                    AND pm.user_id = auth.uid()
+                )
+                OR get_current_user_role() = 'admin'
+            )
+        )
         OR
-        (project_id IS NULL AND COALESCE(user_id, created_by) = auth.uid())
+        (
+            project_id IS NULL 
+            AND COALESCE(user_id, created_by) = auth.uid()
+        )
     );
 

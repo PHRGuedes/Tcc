@@ -7,10 +7,13 @@ import { RequirementsTable } from "@/components/modules/requirements/requirement
 import { RequirementModal } from "@/components/modules/requirements/requirement-modal";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { deleteRequirementAction } from "@/app/actions/requirements";
+import {
+  deleteRequirementAction,
+  getGlobalRequirementsAction,
+} from "@/app/actions/requirements";
 
 export default function GlobalRequirementsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const supabase = useMemo(() => createClient(), []);
 
   const [requirements, setRequirements] = useState([]);
@@ -23,84 +26,22 @@ export default function GlobalRequirementsPage() {
 
   // Carregar Requisitos Globais da biblioteca pessoal do usuário
   const loadGlobalRequirements = useCallback(async () => {
+    // Se a autenticação ainda estiver sendo verificada, aguarda
+    if (authLoading) return;
+
+    if (!user) {
+      setLoading(false);
+      setRequirements([]);
+      return;
+    }
+
     setLoading(true);
     try {
-      // 1. Tentar buscar requisitos onde project_id IS NULL pertencentes ao usuário autenticado
-      let globalList = null;
-      try {
-        let query = supabase
-          .from("requirements")
-          .select("*")
-          .is("project_id", null);
-
-        if (user?.id) {
-          query = query.eq("created_by", user.id);
-        }
-
-        const { data, error } = await query.order("code", { ascending: true });
-        if (!error && data) {
-          globalList = data;
-        }
-      } catch {}
-
-      // 2. Fallback caso a coluna project_id ainda não exista no schema cache do Supabase
-      if (!globalList) {
-        try {
-          let userQuery = supabase.from("requirements").select("*");
-          if (user?.id) {
-            userQuery = userQuery.eq("created_by", user.id);
-          }
-          const { data: userReqs } = await userQuery.order("code", { ascending: true });
-
-          if (userReqs && userReqs.length > 0) {
-            const { data: linked } = await supabase
-              .from("project_requirements")
-              .select("requirement_id");
-            const linkedSet = new Set((linked || []).map((l) => l.requirement_id));
-            const filtered = userReqs.filter(
-              (r) => !linkedSet.has(r.id) || r.source?.includes("Biblioteca")
-            );
-            if (filtered.length > 0) {
-              globalList = filtered;
-            }
-          }
-        } catch {}
-      }
-
-      if (globalList && globalList.length > 0) {
-        setRequirements(globalList);
+      const res = await getGlobalRequirementsAction();
+      if (res?.success) {
+        setRequirements(res.data || []);
       } else {
-        // Fallback para demonstração se a biblioteca ainda estiver vazia
-        setRequirements([
-          {
-            id: "g-01",
-            code: "RF-G01",
-            title: "Padrão de Autenticação Segura (OAuth / JWT)",
-            description:
-              "O sistema deve autenticar usuários utilizando tokens JWT com rotação periódica e suporte a MFA.",
-            type: "RF",
-            priority: "high",
-            source: "Biblioteca Pessoal — Arquitetura de Segurança",
-            justification:
-              "Garantir conformidade com OWASP e proteção contra vazamento de credenciais.",
-            acceptance_criteria:
-              "Tokens expirados devem ser rejeitados; MFA obrigatório para administradores.",
-            is_incomplete: false,
-          },
-          {
-            id: "g-02",
-            code: "RNF-G02",
-            title: "Tempo de Resposta de APIs REST",
-            description:
-              "Endpoints da API devem responder 95% das requisições em menos de 300ms sob carga normal.",
-            type: "RNF",
-            priority: "medium",
-            source: "Biblioteca Pessoal — Performance Baseline",
-            justification: "Experiência de uso fluida e conformidade com SLA acordado.",
-            acceptance_criteria: "Testes de carga com k6 comprovando percentil p95 < 300ms.",
-            is_incomplete: false,
-          },
-        ]);
+        setRequirements([]);
       }
     } catch (err) {
       console.warn("Aviso ao carregar requisitos globais:", err);
@@ -108,7 +49,7 @@ export default function GlobalRequirementsPage() {
     } finally {
       setLoading(false);
     }
-  }, [supabase, user?.id]);
+  }, [authLoading, user]);
 
   useEffect(() => {
     loadGlobalRequirements();
