@@ -13,6 +13,8 @@ import {
   BarChart3,
   Users,
   Layers,
+  Loader2,
+  FileCheck,
 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { useProject } from "@/components/layout/project-context";
@@ -22,12 +24,14 @@ import {
   REQUIREMENT_STATUS_LABELS,
   normalizeRequirementStatus,
 } from "@/lib/constants/statuses";
+import { generateProjectReportPDF } from "@/lib/utils/pdf-generator";
 
 export default function ReportsPage() {
   const { activeProject } = useProject();
   const [activeTab, setActiveTab] = useState("srs"); // 'srs' | 'metricas'
   const [requirements, setRequirements] = useState([]);
   const [userStories, setUserStories] = useState([]);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
@@ -89,6 +93,24 @@ export default function ReportsPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  // Exportar Relatório Profissional Diagramado em PDF
+  const handleDownloadPDF = () => {
+    setIsGeneratingPDF(true);
+    try {
+      generateProjectReportPDF({
+        project: activeProject,
+        requirements,
+        userStories,
+        metrics,
+      });
+    } catch (err) {
+      console.error("Erro ao gerar PDF:", err);
+      alert("Não foi possível gerar o arquivo PDF. Tente novamente.");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   // Exportar Documento SRS em texto (.txt)
@@ -288,27 +310,41 @@ export default function ReportsPage() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPDF}
+              className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 dark:bg-rose-600 dark:hover:bg-rose-700 rounded-xl flex items-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              title="Baixar relatório em PDF com capa, KPIs e tabelas organizadas"
+            >
+              {isGeneratingPDF ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <FileCheck className="w-3.5 h-3.5" />
+              )}
+              <span>Exportar PDF</span>
+            </button>
             <button
               onClick={handlePrint}
               className="px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl flex items-center gap-2 transition-colors cursor-pointer bg-white dark:bg-[#0f172a]"
+              title="Imprimir ou salvar via diálogo do navegador"
             >
               <Printer className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
-              <span>Imprimir / PDF</span>
+              <span>Imprimir</span>
             </button>
             <button
               onClick={handleDownloadCSV}
               className="px-3.5 py-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center gap-2 transition-colors cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Exportar CSV</span>
+              <span>CSV (Excel)</span>
             </button>
             <button
               onClick={handleDownloadSRS}
-              className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+              className="px-3.5 py-2 text-xs font-semibold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center gap-2 shadow-2xs transition-colors cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Baixar SRS</span>
+              <span>SRS (.txt)</span>
             </button>
           </div>
         </div>
@@ -477,62 +513,104 @@ export default function ReportsPage() {
         ) : (
           /* Aba 2: Exportações & Relatórios Analíticos (RF.38 e RF.40) */
           <div className="space-y-6">
-            {/* Cards de Exportação Real */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+            {/* Cards de Exportação Real (RF.38) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {/* Card 1: Relatório em PDF */}
+              <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-5 border border-rose-200/80 dark:border-rose-900/50 shadow-xs flex flex-col justify-between relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-16 h-16 bg-rose-500/10 rounded-bl-full pointer-events-none" />
                 <div>
-                  <FileSpreadsheet className="w-8 h-8 text-emerald-600 dark:text-emerald-400 mb-3" />
+                  <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-3 border border-rose-200 dark:border-rose-800/50">
+                    <FileCheck className="w-5 h-5" />
+                  </div>
                   <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                    Exportar Planilha CSV / Excel
+                    Relatório em PDF (.pdf)
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Planilha tabular com todos os requisitos ({requirements.length}), status de
-                    aprovação, prioridades, responsáveis e critérios de aceitação.
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Documento diagramado profissionalmente (padrão IEEE 830), com capa executiva, KPIs de homologação, tabelas completas de RF/RNF e Histórias de Usuário.
+                  </p>
+                </div>
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={isGeneratingPDF}
+                  className="mt-5 w-full py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl shadow-2xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isGeneratingPDF ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Gerando PDF...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Baixar Relatório (PDF)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Card 2: Planilha CSV */}
+              <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 border border-emerald-200 dark:border-emerald-800/50">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                    Planilha CSV / Excel
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Planilha com todos os requisitos ({requirements.length}), status, prioridades, responsáveis, fontes e critérios de aceitação (UTF-8 com BOM).
                   </p>
                 </div>
                 <button
                   onClick={handleDownloadCSV}
-                  className="mt-5 w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 font-semibold text-xs rounded-xl border border-emerald-200 dark:border-emerald-800/40 transition-colors cursor-pointer"
+                  className="mt-5 w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 font-semibold text-xs rounded-xl border border-emerald-200 dark:border-emerald-800/40 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  Baixar Planilha (.csv)
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Baixar Planilha (.csv)</span>
                 </button>
               </div>
 
-              <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+              {/* Card 3: Documento SRS Texto */}
+              <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
                 <div>
-                  <FileText className="w-8 h-8 text-blue-600 dark:text-blue-400 mb-3" />
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 border border-blue-200 dark:border-blue-800/50">
+                    <FileText className="w-5 h-5" />
+                  </div>
                   <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                    Documento SRS (IEEE 830)
+                    Documento SRS (.txt)
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Especificação completa formatada pronta para entrega acadêmica e validação com
-                    stakeholders.
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Texto integral formatado conforme IEEE Std 830 para validação com stakeholders e inclusão em anexos de TCC.
                   </p>
                 </div>
                 <button
                   onClick={handleDownloadSRS}
-                  className="mt-5 w-full py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-400 font-semibold text-xs rounded-xl border border-blue-200 dark:border-blue-800/40 transition-colors cursor-pointer"
+                  className="mt-5 w-full py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-400 font-semibold text-xs rounded-xl border border-blue-200 dark:border-blue-800/40 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  Baixar Documento (.txt)
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Baixar SRS (.txt)</span>
                 </button>
               </div>
 
-              <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+              {/* Card 4: JSON Estruturado */}
+              <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col justify-between">
                 <div>
-                  <FileCode className="w-8 h-8 text-purple-600 dark:text-purple-400 mb-3" />
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3 border border-purple-200 dark:border-purple-800/50">
+                    <FileCode className="w-5 h-5" />
+                  </div>
                   <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                    Exportar JSON Estruturado
+                    Dados em JSON (.json)
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    Arquivo JSON com todos os requisitos, versões e histórias de usuário para
-                    interoperabilidade e backup.
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    Arquivo JSON com todos os metadados do projeto, requisitos, versões e histórias de usuário para interoperabilidade e backup.
                   </p>
                 </div>
                 <button
                   onClick={handleDownloadJSON}
-                  className="mt-5 w-full py-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-400 font-semibold text-xs rounded-xl border border-purple-200 dark:border-purple-800/40 transition-colors cursor-pointer"
+                  className="mt-5 w-full py-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-400 font-semibold text-xs rounded-xl border border-purple-200 dark:border-purple-800/40 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  Baixar Dados (.json)
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Baixar Dados (.json)</span>
                 </button>
               </div>
             </div>

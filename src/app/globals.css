@@ -57,3 +57,50 @@ body {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Regras de Impressão Profissional (Print / Salvar como PDF) */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 14mm 12mm 14mm;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 9pt;
+  }
+
+  /* Ocultar elementos de navegação e controles na impressão */
+  header,
+  aside,
+  nav,
+  button,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  #srs-document {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    background: transparent !important;
+    color: #0f172a !important;
+  }
+
+  /* Evitar quebra no meio de blocos de requisitos */
+  section,
+  .py-3\.5,
+  .py-3 {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
