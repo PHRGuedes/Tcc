@@ -9,7 +9,11 @@ import {
   useMemo,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { createProjectAction, updateProjectAction } from "@/app/actions/projects";
+import {
+  createProjectAction,
+  updateProjectAction,
+  deleteProjectAction,
+} from "@/app/actions/projects";
 
 const STORAGE_KEY = "reqflow_active_project_id";
 
@@ -21,6 +25,7 @@ const ProjectContext = createContext({
   refreshProjects: () => {},
   createProject: async () => {},
   updateProject: async () => {},
+  deleteProject: async () => {},
 });
 
 export function ProjectProvider({ children }) {
@@ -135,6 +140,25 @@ export function ProjectProvider({ children }) {
     return updated;
   };
 
+  // Função para excluir projeto do Supabase via Server Action
+  const deleteProject = async (projectId) => {
+    const result = await deleteProjectAction(projectId);
+    if (!result.success) {
+      throw new Error(result.error || "Não foi possível excluir o projeto.");
+    }
+
+    setProjects((prev) => {
+      const remaining = prev.filter((p) => p.id !== projectId);
+      if (activeProject?.id === projectId) {
+        const nextActive = remaining[0] || null;
+        handleSetActiveProject(nextActive);
+      }
+      return remaining;
+    });
+
+    return true;
+  };
+
   return (
     <ProjectContext.Provider
       value={{
@@ -145,6 +169,7 @@ export function ProjectProvider({ children }) {
         refreshProjects: fetchProjects,
         createProject,
         updateProject,
+        deleteProject,
       }}
     >
       {children}

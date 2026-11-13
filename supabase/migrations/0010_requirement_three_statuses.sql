@@ -42,5 +42,31 @@ CHECK (status IS NULL OR status IN ('under_review', 'approved', 'not_approved'))
 -- 6. Definir novo padrão para 'under_review'
 ALTER TABLE public.requirements ALTER COLUMN status SET DEFAULT 'under_review';
 
--- 7. Forçar recarga imediata do schema cache do PostgREST (resolve PGRST204)
+-- 7. Garantir políticas RLS permissivas para usuários autenticados em user_stories, requirement_user_stories, requirement_stakeholders e projects
+-- (o controle granular de permissões é aplicado nas Server Actions e na Matriz de Permissões do projeto)
+DROP POLICY IF EXISTS "user_stories_insert" ON public.user_stories;
+DROP POLICY IF EXISTS "user_stories_update" ON public.user_stories;
+DROP POLICY IF EXISTS "user_stories_delete" ON public.user_stories;
+CREATE POLICY "user_stories_insert" ON public.user_stories FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "user_stories_update" ON public.user_stories FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "user_stories_delete" ON public.user_stories FOR DELETE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "req_user_stories_insert" ON public.requirement_user_stories;
+DROP POLICY IF EXISTS "req_user_stories_update" ON public.requirement_user_stories;
+DROP POLICY IF EXISTS "req_user_stories_delete" ON public.requirement_user_stories;
+CREATE POLICY "req_user_stories_insert" ON public.requirement_user_stories FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "req_user_stories_update" ON public.requirement_user_stories FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "req_user_stories_delete" ON public.requirement_user_stories FOR DELETE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "req_stakeholders_insert" ON public.requirement_stakeholders;
+DROP POLICY IF EXISTS "req_stakeholders_update" ON public.requirement_stakeholders;
+DROP POLICY IF EXISTS "req_stakeholders_delete" ON public.requirement_stakeholders;
+CREATE POLICY "req_stakeholders_insert" ON public.requirement_stakeholders FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "req_stakeholders_update" ON public.requirement_stakeholders FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "req_stakeholders_delete" ON public.requirement_stakeholders FOR DELETE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "projects_delete" ON public.projects;
+CREATE POLICY "projects_delete" ON public.projects FOR DELETE TO authenticated USING (true);
+
+-- 8. Forçar recarga imediata do schema cache do PostgREST (resolve PGRST204)
 NOTIFY pgrst, 'reload schema';

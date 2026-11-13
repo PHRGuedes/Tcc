@@ -98,10 +98,11 @@ export const ALLOWED_PROJECT_ROLES = [
 
 export function ManageProjectModal({ isOpen, onClose }) {
   const { user } = useAuth();
-  const { activeProject, updateProject } = useProject();
+  const { activeProject, updateProject, deleteProject } = useProject();
 
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("general"); // "general" | "stakeholders"
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -269,6 +270,28 @@ export function ManageProjectModal({ isOpen, onClose }) {
       navigator.clipboard.writeText(activeProject.id);
       setCopiedId(true);
       setTimeout(() => setCopiedId(false), 2000);
+    }
+  };
+
+  // Handler para excluir projeto permanentemente
+  const handleDeleteProject = async () => {
+    if (!activeProject?.id || !isCurrentUserAdmin) return;
+    const confirmed = window.confirm(
+      `ATENÇÃO: Deseja realmente excluir o projeto "${activeProject.name}"? Todos os requisitos, user stories e sprints vinculados serão removidos permanentemente.`
+    );
+    if (!confirmed) return;
+
+    setIsDeletingProject(true);
+    setGeneralError("");
+
+    try {
+      await deleteProject(activeProject.id);
+      onClose();
+    } catch (err) {
+      console.error("Erro ao excluir projeto:", err);
+      setGeneralError(err.message || "Não foi possível excluir o projeto.");
+    } finally {
+      setIsDeletingProject(false);
     }
   };
 
@@ -675,6 +698,35 @@ export function ManageProjectModal({ isOpen, onClose }) {
                   </div>
                 </div>
               </div>
+
+              {/* Zona de Perigo (Apenas Administrador / Criador) */}
+              {isCurrentUserAdmin && (
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div className="p-3.5 rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50/40 dark:bg-rose-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-rose-700 dark:text-rose-400">
+                        Zona de Perigo — Excluir Projeto
+                      </p>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                        Remove permanentemente este projeto, seus requisitos, user stories e sprints.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isDeletingProject}
+                      onClick={handleDeleteProject}
+                      className="px-3.5 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors disabled:opacity-60 shrink-0 cursor-pointer"
+                    >
+                      {isDeletingProject ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      <span>Excluir Projeto</span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Ações da aba Geral */}
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100 dark:border-slate-800">

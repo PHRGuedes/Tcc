@@ -80,8 +80,20 @@ export function RequirementModal({
         responsible_id: requirement.responsible_id || "",
       });
 
-      // Carregar histórico de versões
+      // Carregar histórico de versões e vínculo de User Story
       if (requirement.id) {
+        supabase
+          .from("requirement_user_stories")
+          .select("user_story_id")
+          .eq("requirement_id", requirement.id)
+          .limit(1)
+          .maybeSingle()
+          .then(({ data: linkRow }) => {
+            if (linkRow?.user_story_id) {
+              setFormData((prev) => ({ ...prev, user_story_id: linkRow.user_story_id }));
+            }
+          });
+
         supabase
           .from("requirement_versions")
           .select("*, profiles(full_name)")
@@ -175,6 +187,7 @@ export function RequirementModal({
           source: formData.source,
           acceptanceCriteria: formData.acceptance_criteria,
           responsibleId: formData.responsible_id,
+          userStoryId: formData.user_story_id,
           versionComment: sendToApproval
             ? "Requisito enviado para aprovação."
             : "Atualização dos dados do requisito.",

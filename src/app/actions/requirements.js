@@ -361,6 +361,7 @@ export async function updateRequirementAction(id, payload) {
       source,
       acceptanceCriteria,
       responsibleId,
+      userStoryId,
       versionComment,
     } = payload;
 
@@ -401,6 +402,23 @@ export async function updateRequirementAction(id, payload) {
         };
       }
       return { success: false, error: updateError.message };
+    }
+
+    // Atualizar vínculo com User Story caso informada
+    if (scope === "project" && userStoryId !== undefined) {
+      try {
+        if (userStoryId) {
+          await supabase.from("requirement_user_stories").upsert(
+            {
+              requirement_id: id,
+              user_story_id: userStoryId,
+            },
+            { onConflict: "requirement_id,user_story_id" }
+          );
+        }
+      } catch (usErr) {
+        console.warn("Aviso ao atualizar vínculo de User Story:", usErr);
+      }
     }
 
     // Criar nova versão no histórico

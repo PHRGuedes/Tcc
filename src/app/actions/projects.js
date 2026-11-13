@@ -144,6 +144,54 @@ export async function updateProjectAction({ projectId, name, description }) {
 }
 
 /**
+ * Server Action para excluir permanentemente um projeto (apenas Administrador ou Criador)
+ */
+export async function deleteProjectAction(projectId) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    if (!projectId) {
+      return { success: false, error: "ID do projeto não informado." };
+    }
+
+    const isAdmin = await checkIsProjectAdmin(supabase, projectId, user.id);
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: "Apenas o administrador ou criador do projeto pode excluí-lo.",
+      };
+    }
+
+    const { error: deleteError } = await supabase
+      .from("projects")
+      .delete()
+      .eq("id", projectId);
+
+    if (deleteError) {
+      console.error("Erro ao excluir projeto:", deleteError);
+      return { success: false, error: deleteError.message };
+    }
+
+    revalidatePath("/", "layout");
+    return { success: true };
+  } catch (err) {
+    console.error("Exceção em deleteProjectAction:", err);
+    return {
+      success: false,
+      error: "Ocorreu um erro interno ao excluir o projeto.",
+    };
+  }
+}
+
+/**
  * Server Action para listar stakeholders (membros) vinculados ao projeto.
  * Garante que o criador do projeto (created_by) esteja automaticamente cadastrado como 'admin'.
  */
