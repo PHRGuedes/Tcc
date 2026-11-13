@@ -38,7 +38,6 @@ export function EditProfileModal({ isOpen, onClose }) {
 
   const [mounted, setMounted] = useState(false);
   const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState(ROLES.REQUIREMENTS_ANALYST);
   const [avatarUrl, setAvatarUrl] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -56,7 +55,6 @@ export function EditProfileModal({ isOpen, onClose }) {
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name || "");
-      setRole(profile.role || ROLES.REQUIREMENTS_ANALYST);
       setAvatarUrl(profile.avatar_url || "");
       setNewPassword("");
       setConfirmPassword("");
@@ -149,7 +147,6 @@ export function EditProfileModal({ isOpen, onClose }) {
         .from("profiles")
         .update({
           full_name: fullName.trim(),
-          role: role,
           avatar_url: avatarUrl || null,
           updated_at: new Date().toISOString(),
         })
@@ -168,7 +165,6 @@ export function EditProfileModal({ isOpen, onClose }) {
       const authUpdatePayload = {
         data: {
           full_name: fullName.trim(),
-          role: role,
           avatar_url: isShortUrl ? avatarUrl : null,
         },
       };
@@ -382,28 +378,6 @@ export function EditProfileModal({ isOpen, onClose }) {
               <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
                 O e-mail é utilizado para autenticação no sistema.
               </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-                Papel Principal no Sistema
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400 dark:text-slate-500 pointer-events-none">
-                  <Shield className="w-4 h-4" />
-                </span>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs transition-all cursor-pointer"
-                >
-                  {Object.entries(ROLE_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
           </div>
 

@@ -261,9 +261,26 @@ export async function getAvailableProfilesAction() {
   }
 }
 
+const VALID_PROJECT_ROLES = [
+  "admin",
+  "requirements_analyst",
+  "product_owner",
+  "scrum_master",
+  "developer",
+  "project_manager",
+];
+
+const PROJECT_ROLE_LABELS = {
+  admin: "Administrador",
+  requirements_analyst: "Analista de Requisitos",
+  product_owner: "Product Owner",
+  scrum_master: "Scrum Master",
+  developer: "Desenvolvedor",
+  project_manager: "Gerente de Projeto",
+};
+
 /**
  * Server Action para adicionar um stakeholder ao projeto
- * Perfis permitidos inicialmente: 'admin' e 'developer'
  */
 export async function addProjectMemberAction({ projectId, userId, roleInProject }) {
   try {
@@ -281,9 +298,7 @@ export async function addProjectMemberAction({ projectId, userId, roleInProject 
       return { success: false, error: "Projeto e usuário são obrigatórios." };
     }
 
-    // Permitidos: 'admin' ou 'developer'
-    const validRoles = ["admin", "developer"];
-    const role = validRoles.includes(roleInProject) ? roleInProject : "developer";
+    const role = VALID_PROJECT_ROLES.includes(roleInProject) ? roleInProject : "developer";
 
     const { data, error } = await supabase
       .from("project_members")
@@ -326,7 +341,7 @@ export async function addProjectMemberAction({ projectId, userId, roleInProject 
         entity_type: "project_member",
         entity_id: data.id,
         action: "created",
-        description: `adicionou ${data.profiles?.full_name || "o membro"} como ${role === "admin" ? "Administrador" : "Desenvolvedor"}`,
+        description: `adicionou ${data.profiles?.full_name || "o membro"} como ${PROJECT_ROLE_LABELS[role] || role}`,
       });
     } catch (auditErr) {
       console.warn("Aviso ao registrar auditoria de membro:", auditErr);
@@ -358,12 +373,27 @@ export async function updateProjectMemberRoleAction({ memberId, roleInProject, p
       return { success: false, error: "Usuário não autenticado." };
     }
 
-    const validRoles = ["admin", "developer"];
-    if (!validRoles.includes(roleInProject)) {
+    if (!VALID_PROJECT_ROLES.includes(roleInProject)) {
       return {
         success: false,
-        error: "Função inválida. Escolha entre Administrador ou Desenvolvedor.",
+        error: "Perfil de acesso no projeto inválido.",
       };
+    }
+
+    // Proteger o criador do projeto para não ter sua função rebaixada de admin
+    if (projectId) {
+      const { data: member } = await supabase
+        .from("project_members")
+        .select("user_id, projects(created_by)")
+        .eq("id", memberId)
+        .maybeSingle();
+
+      if (member?.user_id && member.projects?.created_by === member.user_id) {
+        return {
+          success: false,
+          error: "O criador do projeto deve permanecer sempre como Administrador.",
+        };
+      }
     }
 
     const { data, error } = await supabase
@@ -398,7 +428,7 @@ export async function updateProjectMemberRoleAction({ memberId, roleInProject, p
           entity_type: "project_member",
           entity_id: memberId,
           action: "updated",
-          description: `alterou a função de ${data.profiles?.full_name || "membro"} para ${roleInProject === "admin" ? "Administrador" : "Desenvolvedor"}`,
+          description: `alterou a função de ${data.profiles?.full_name || "membro"} para ${PROJECT_ROLE_LABELS[roleInProject] || roleInProject}`,
         });
       } catch (auditErr) {
         console.warn("Aviso de auditoria:", auditErr);

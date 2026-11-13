@@ -21,6 +21,7 @@ import { getInitials } from "@/lib/utils/formatters";
 import { ROLE_LABELS } from "@/lib/constants/roles";
 import { ManageProjectModal } from "@/components/modules/projects/manage-project-modal";
 import { EditProfileModal } from "@/components/modules/profile/edit-profile-modal";
+import { createClient } from "@/lib/supabase/client";
 
 export function Topbar({ title = "Dashboard" }) {
   const { profile, loading, signOut } = useAuth();
@@ -37,17 +38,50 @@ export function Topbar({ title = "Dashboard" }) {
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [projectRole, setProjectRole] = useState(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  const isProjectCreator = Boolean(
+    activeProject?.created_by && profile?.id && activeProject.created_by === profile.id
+  );
+
+  useEffect(() => {
+    if (!activeProject?.id || !profile?.id) return;
+
+    if (activeProject.created_by === profile.id) {
+      setProjectRole("admin");
+      return;
+    }
+
+    const supabase = createClient();
+    supabase
+      .from("project_members")
+      .select("role_in_project")
+      .eq("project_id", activeProject.id)
+      .eq("user_id", profile.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.role_in_project) {
+          setProjectRole(data.role_in_project);
+        } else {
+          setProjectRole(null);
+        }
+      });
+  }, [activeProject?.id, activeProject?.created_by, profile?.id]);
+
   const userInitials = profile?.full_name ? getInitials(profile.full_name) : "--";
-  const roleLabel = profile?.role
+  const roleLabel = isProjectCreator
+    ? "Criador • Administrador"
+    : projectRole
+    ? ROLE_LABELS[projectRole] || projectRole
+    : profile?.role
     ? ROLE_LABELS[profile.role] || profile.role
     : loading
     ? "Carregando..."
-    : "";
+    : "Membro";
 
   const handleCreateProject = async (e) => {
     e.preventDefault();

@@ -14,6 +14,10 @@ import {
   Shield,
   Code2,
   Copy,
+  FileText,
+  Target,
+  Sparkles,
+  Briefcase,
 } from "lucide-react";
 import { useProject } from "@/components/layout/project-context";
 import {
@@ -25,21 +29,49 @@ import {
 } from "@/app/actions/projects";
 import { getInitials } from "@/lib/utils/formatters";
 
-// Apenas os dois perfis solicitados nesta fase
+// Perfis de acesso disponíveis para atribuição exclusiva no escopo do projeto
 export const ALLOWED_PROJECT_ROLES = [
   {
     id: "admin",
     label: "Administrador",
-    description: "Acesso total à gestão de requisitos, sprints e membros do projeto.",
+    description: "Gestão integral de requisitos, sprints, stakeholders e configurações do projeto.",
     icon: Shield,
-    badgeClass: "bg-blue-50 text-blue-700 border-blue-200",
+    badgeClass: "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50",
+  },
+  {
+    id: "requirements_analyst",
+    label: "Analista de Requisitos",
+    description: "Levantamento, especificação, detalhamento e validação dos requisitos.",
+    icon: FileText,
+    badgeClass: "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/50",
+  },
+  {
+    id: "product_owner",
+    label: "Product Owner",
+    description: "Priorização do backlog, aprovação de requisitos e alinhamento com os objetivos de negócio.",
+    icon: Target,
+    badgeClass: "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800/50",
+  },
+  {
+    id: "scrum_master",
+    label: "Scrum Master",
+    description: "Facilitação de sprints, acompanhamento de impedimentos e métricas do time.",
+    icon: Sparkles,
+    badgeClass: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800/50",
   },
   {
     id: "developer",
     label: "Desenvolvedor",
-    description: "Implementação, movimentação no backlog e visualização dos requisitos.",
+    description: "Implementação técnica, estimativas e movimentação de status no backlog das sprints.",
     icon: Code2,
-    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    badgeClass: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50",
+  },
+  {
+    id: "project_manager",
+    label: "Gerente de Projeto",
+    description: "Supervisão do cronograma, alocação de recursos e relatórios executivos.",
+    icon: Briefcase,
+    badgeClass: "bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800/50",
   },
 ];
 
@@ -440,29 +472,14 @@ export function ManageProjectModal({ isOpen, onClose }) {
                 </div>
               )}
 
-              {/* Box explicativo das permissões iniciais (Admin e Desenvolvedor) */}
+              {/* Box explicativo das permissões por projeto */}
               <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
-                <p className="font-semibold text-slate-800 dark:text-slate-200 mb-1">Controle de Perfis no Projeto:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                  <div className="flex items-start gap-2 p-2 rounded-lg bg-white dark:bg-[#131c31] border border-slate-200 dark:border-slate-800">
-                    <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-slate-800 dark:text-slate-200 block text-[11px]">Administrador (adm)</span>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Gestão integral de requisitos, sprints e membros do projeto.
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2 p-2 rounded-lg bg-white dark:bg-[#131c31] border border-slate-200 dark:border-slate-800">
-                    <Code2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-slate-800 dark:text-slate-200 block text-[11px]">Desenvolvedor</span>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Implementação, movimentação de status no backlog e consulta.
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <p className="font-semibold text-slate-800 dark:text-slate-200 mb-1">
+                  Atribuição de Papéis no Projeto:
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  O perfil de acesso de cada pessoa é determinado exclusivamente no contexto de cada projeto ao qual ela é associada. O criador do projeto é sempre o <strong>Administrador</strong>.
+                </p>
               </div>
 
               {/* Formulário: Vincular Novo Stakeholder */}
@@ -622,21 +639,20 @@ export function ManageProjectModal({ isOpen, onClose }) {
                             {/* Seletor Rápido de Perfil */}
                             <select
                               disabled={isActing || isCreator}
-                              value={
-                                member.role_in_project === "admin"
-                                  ? "admin"
-                                  : "developer"
-                              }
+                              value={member.role_in_project || "developer"}
                               onChange={(e) => handleRoleChange(member.id, e.target.value)}
                               className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-[#131c31] hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs transition-all cursor-pointer disabled:opacity-60 disabled:bg-slate-100 dark:disabled:bg-slate-800"
                               title={
                                 isCreator
-                                  ? "O criador do projeto deve permanecer como Administrador"
+                                  ? "O criador do projeto deve permanecer sempre como Administrador"
                                   : "Alterar perfil do stakeholder no projeto"
                               }
                             >
-                              <option value="admin">Administrador</option>
-                              <option value="developer">Desenvolvedor</option>
+                              {ALLOWED_PROJECT_ROLES.map((r) => (
+                                <option key={r.id} value={r.id}>
+                                  {r.label}
+                                </option>
+                              ))}
                             </select>
 
                             {/* Botão Remover (Desabilitado para o criador do projeto) */}
