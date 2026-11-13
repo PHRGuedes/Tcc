@@ -42,6 +42,7 @@ export function Topbar({ title = "Dashboard" }) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [projectActivities, setProjectActivities] = useState([]);
   const [actionNotificationId, setActionNotificationId] = useState(null);
   const [isLeavingProject, setIsLeavingProject] = useState(false);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -90,29 +91,43 @@ export function Topbar({ title = "Dashboard" }) {
       });
   }, [activeProject?.id, activeProject?.created_by, profile?.id]);
 
-  // Carrega e monitora convites pendentes recebidos pelo usuário
+  // Carrega e monitora convites pendentes e notificações recentes do projeto (RF.41)
   useEffect(() => {
     if (!profile?.id) return;
     let isMounted = true;
 
-    const loadInvites = async () => {
+    const loadInvitesAndActivities = async () => {
       try {
         const res = await getUserProjectInvitationsAction();
         if (isMounted && res.success) {
           setNotifications(res.data || []);
         }
+
+        if (activeProject?.id) {
+          const supabase = createClient();
+          const { data: logs } = await supabase
+            .from("audit_logs")
+            .select("id, action, entity_type, description, created_at, profiles(full_name)")
+            .eq("project_id", activeProject.id)
+            .order("created_at", { ascending: false })
+            .limit(8);
+
+          if (isMounted && logs) {
+            setProjectActivities(logs);
+          }
+        }
       } catch (err) {
-        console.warn("Aviso ao buscar convites de projetos:", err);
+        console.warn("Aviso ao buscar notificações:", err);
       }
     };
 
-    loadInvites();
-    const interval = setInterval(loadInvites, 20000);
+    loadInvitesAndActivities();
+    const interval = setInterval(loadInvitesAndActivities, 20000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [profile?.id]);
+  }, [profile?.id, activeProject?.id, showNotifications]);
 
   const userInitials = profile?.full_name ? getInitials(profile.full_name) : "--";
   const roleLabel = isProjectCreator
@@ -353,13 +368,13 @@ export function Topbar({ title = "Dashboard" }) {
                 )}
               </div>
 
-              {notifications.length === 0 ? (
+              {notifications.length === 0 && projectActivities.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-400 dark:text-slate-500 flex flex-col items-center justify-center gap-2">
                   <Mail className="w-6 h-6 text-slate-300 dark:text-slate-600" />
-                  <span>Você não possui novos convites de projetos pendentes.</span>
+                  <span>Você não possui convites ou alertas recentes neste projeto.</span>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-80 overflow-y-auto">
+                <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-96 overflow-y-auto">
                   {notifications.map((invite) => {
                     const isActing = actionNotificationId === invite.id;
                     const roleLabelInvited =
@@ -367,7 +382,7 @@ export function Topbar({ title = "Dashboard" }) {
                     return (
                       <div
                         key={invite.id}
-                        className="p-3.5 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                        className="p-3.5 bg-blue-50/40 dark:bg-blue-950/20 hover:bg-blue-50/80 dark:hover:bg-blue-950/40 transition-colors"
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 rounded-xl bg-blue-100/70 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5 border border-blue-200 dark:border-blue-900/50">
@@ -421,6 +436,41 @@ export function Topbar({ title = "Dashboard" }) {
                       </div>
                     );
                   })}
+
+                  {/* Atividades & Alertas Recentes do Projeto Ativo (RF.41) */}
+                  {projectActivities.length > 0 && (
+                    <>
+                      <div className="px-3.5 py-2 bg-slate-50 dark:bg-slate-900/80 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                        Alertas Recentes do Projeto ({activeProject?.name || "Projeto"})
+                      </div>
+                      {projectActivities.map((act) => (
+                        <div
+                          key={act.id}
+                          className="p-3 hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors flex items-start gap-2.5"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                            {getInitials(act.profiles?.full_name || "Sistema")}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-snug">
+                              <strong className="text-slate-900 dark:text-white font-semibold">
+                                {act.profiles?.full_name || "Membro"}
+                              </strong>{" "}
+                              {act.description}
+                            </p>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 block">
+                              {new Date(act.created_at).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>

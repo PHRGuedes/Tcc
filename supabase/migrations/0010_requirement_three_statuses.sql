@@ -68,5 +68,15 @@ CREATE POLICY "req_stakeholders_delete" ON public.requirement_stakeholders FOR D
 DROP POLICY IF EXISTS "projects_delete" ON public.projects;
 CREATE POLICY "projects_delete" ON public.projects FOR DELETE TO authenticated USING (true);
 
+DROP POLICY IF EXISTS "req_dependencies_insert" ON public.requirement_dependencies;
+DROP POLICY IF EXISTS "req_dependencies_update" ON public.requirement_dependencies;
+DROP POLICY IF EXISTS "req_dependencies_delete" ON public.requirement_dependencies;
+CREATE POLICY "req_dependencies_insert" ON public.requirement_dependencies FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY "req_dependencies_update" ON public.requirement_dependencies FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "req_dependencies_delete" ON public.requirement_dependencies FOR DELETE TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "audit_logs_insert" ON public.audit_logs;
+CREATE POLICY "audit_logs_insert" ON public.audit_logs FOR INSERT TO authenticated WITH CHECK (true);
+
 -- 8. Forçar recarga imediata do schema cache do PostgREST (resolve PGRST204)
 NOTIFY pgrst, 'reload schema';

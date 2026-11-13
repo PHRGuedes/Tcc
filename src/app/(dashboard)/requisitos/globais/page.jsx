@@ -86,6 +86,7 @@ export default function GlobalRequirementsPage() {
             setToastMessage("Requisito global salvo na sua biblioteca com sucesso!");
             setTimeout(() => setToastMessage(""), 4000);
           }}
+          existingRequirements={requirements}
         />
       )}
 

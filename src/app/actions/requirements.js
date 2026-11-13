@@ -841,3 +841,280 @@ export async function updateRequirementStatusAction({ id, status, projectId }) {
     return { success: false, error: "Erro interno ao atualizar status do requisito." };
   }
 }
+
+/**
+ * RF.24 - Buscar comentários e decisões vinculados a um requisito
+ */
+export async function getRequirementCommentsAction(requirementId) {
+  try {
+    if (!requirementId) return { success: true, data: [] };
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("id, user_id, action, description, details, created_at, profiles(full_name, email)")
+      .eq("entity_type", "requirement_comment")
+      .eq("entity_id", String(requirementId))
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      return { success: false, error: error.message, data: [] };
+    }
+
+    const formatted = (data || []).map((row) => ({
+      id: row.id,
+      author: row.profiles?.full_name || "Membro do Projeto",
+      commentType: row.details?.commentType || (row.action === "decision" ? "decision" : "comment"),
+      content: row.details?.content || row.description,
+      createdAt: row.created_at,
+    }));
+
+    return { success: true, data: formatted };
+  } catch (err) {
+    console.error("Exceção em getRequirementCommentsAction:", err);
+    return { success: false, data: [] };
+  }
+}
+
+/**
+ * RF.24 - Registrar novo comentário ou decisão técnica/negócio em um requisito
+ */
+export async function addRequirementCommentAction({
+  requirementId,
+  requirementCode,
+  projectId,
+  content,
+  commentType = "comment", // 'comment' | 'decision'
+}) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    if (!requirementId || !content?.trim()) {
+      return { success: false, error: "O texto do comentário/decisão é obrigatório." };
+    }
+
+    const trimmed = content.trim();
+    const isDecision = commentType === "decision";
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from("audit_logs")
+      .insert({
+        project_id: projectId || null,
+        user_id: user.id,
+        entity_type: "requirement_comment",
+        entity_id: String(requirementId),
+        action: isDecision ? "decision" : "commented",
+        description: `${isDecision ? "registrou uma decisão em" : "comentou no requisito"} ${requirementCode || "REQ"}: "${trimmed.slice(0, 80)}${trimmed.length > 80 ? "..." : ""}"`,
+        details: {
+          content: trimmed,
+          commentType: isDecision ? "decision" : "comment",
+          requirementCode: requirementCode || "REQ",
+        },
+      })
+      .select("id, user_id, action, description, details, created_at, profiles(full_name)")
+      .single();
+
+    if (insertErr) {
+      return { success: false, error: insertErr.message };
+    }
+
+    revalidatePath("/", "layout");
+    return {
+      success: true,
+      data: {
+        id: inserted.id,
+        author: inserted.profiles?.full_name || "Você",
+        commentType: isDecision ? "decision" : "comment",
+        content: trimmed,
+        createdAt: inserted.created_at,
+      },
+    };
+  } catch (err) {
+    console.error("Exceção em addRequirementCommentAction:", err);
+    return { success: false, error: "Erro ao registrar comentário." };
+  }
+}
+
+/**
+ * RF.20 & RF.21 - Buscar dependências entre requisitos e artefatos impactados (Análise de Impacto)
+ */
+export async function getRequirementDependenciesAction(requirementId) {
+  try {
+    if (!requirementId) {
+      return { success: true, dependencies: [], impactedStories: [] };
+    }
+    const supabase = await createClient();
+
+    // 1. Buscar dependências onde este requisito é origem ou destino
+    const [outgoingRes, incomingRes, storiesRes] = await Promise.all([
+      supabase
+        .from("requirement_dependencies")
+        .select(
+          "id, source_req_id, target_req_id, dependency_type, target:target_req_id(id, code, title, status, priority)"
+        )
+        .eq("source_req_id", requirementId),
+      supabase
+        .from("requirement_dependencies")
+        .select(
+          "id, source_req_id, target_req_id, dependency_type, source:source_req_id(id, code, title, status, priority)"
+        )
+        .eq("target_req_id", requirementId),
+      supabase
+        .from("requirement_user_stories")
+        .select("user_story_id, user_stories(id, code, title, status, priority)")
+        .eq("requirement_id", requirementId),
+    ]);
+
+    const outgoing = (outgoingRes.data || []).map((d) => ({
+      id: d.id,
+      direction: "outgoing",
+      dependencyType: d.dependency_type,
+      relatedReq: d.target,
+    }));
+
+    const incoming = (incomingRes.data || []).map((d) => ({
+      id: d.id,
+      direction: "incoming",
+      dependencyType: d.dependency_type,
+      relatedReq: d.source,
+    }));
+
+    const impactedStories = (storiesRes.data || [])
+      .map((s) => s.user_stories)
+      .filter(Boolean);
+
+    return {
+      success: true,
+      dependencies: [...outgoing, ...incoming].filter((d) => d.relatedReq),
+      impactedStories,
+    };
+  } catch (err) {
+    console.error("Exceção em getRequirementDependenciesAction:", err);
+    return { success: false, dependencies: [], impactedStories: [] };
+  }
+}
+
+/**
+ * RF.20 - Adicionar dependência entre requisitos (conflito, complemento, refinamento, dependência)
+ */
+export async function addRequirementDependencyAction({
+  projectId,
+  sourceReqId,
+  targetReqId,
+  dependencyType = "depends_on",
+}) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    if (!sourceReqId || !targetReqId) {
+      return { success: false, error: "Selecione o requisito relacionado." };
+    }
+
+    if (sourceReqId === targetReqId) {
+      return {
+        success: false,
+        error: "Um requisito não pode depender de si mesmo.",
+      };
+    }
+
+    const validTypes = ["depends_on", "complements", "refines", "conflict"];
+    const finalType = validTypes.includes(dependencyType)
+      ? dependencyType
+      : "depends_on";
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from("requirement_dependencies")
+      .insert({
+        source_req_id: sourceReqId,
+        target_req_id: targetReqId,
+        dependency_type: finalType,
+      })
+      .select(
+        "id, source_req_id, target_req_id, dependency_type, target:target_req_id(id, code, title, status, priority)"
+      )
+      .single();
+
+    if (insertErr) {
+      if (insertErr.code === "23505") {
+        return {
+          success: false,
+          error: "Esta relação de dependência já está registrada.",
+        };
+      }
+      return { success: false, error: insertErr.message };
+    }
+
+    if (projectId) {
+      try {
+        await supabase.from("audit_logs").insert({
+          project_id: projectId,
+          user_id: user.id,
+          entity_type: "requirement",
+          entity_id: sourceReqId,
+          action: "linked",
+          description: `registrou dependência (${finalType}) com o requisito ${inserted?.target?.code || ""}`,
+        });
+      } catch {}
+    }
+
+    return {
+      success: true,
+      data: {
+        id: inserted.id,
+        direction: "outgoing",
+        dependencyType: inserted.dependency_type,
+        relatedReq: inserted.target,
+      },
+    };
+  } catch (err) {
+    console.error("Exceção em addRequirementDependencyAction:", err);
+    return { success: false, error: "Erro interno ao registrar dependência." };
+  }
+}
+
+/**
+ * RF.20 - Remover dependência entre requisitos
+ */
+export async function removeRequirementDependencyAction({ dependencyId }) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    const { error } = await supabase
+      .from("requirement_dependencies")
+      .delete()
+      .eq("id", dependencyId);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("Exceção em removeRequirementDependencyAction:", err);
+    return { success: false, error: "Erro ao remover dependência." };
+  }
+}

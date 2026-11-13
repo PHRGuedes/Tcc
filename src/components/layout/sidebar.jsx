@@ -16,6 +16,8 @@ import {
   ChevronRight,
   FolderKanban,
   Globe,
+  Menu,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils/cn";
@@ -26,13 +28,15 @@ export function Sidebar() {
 
   const isRequisitosActive = pathname.startsWith("/requisitos");
   const [isRequisitosOpen, setIsRequisitosOpen] = useState(isRequisitosActive);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Mantém aberto se a rota ativa for de requisitos
   useEffect(() => {
     if (isRequisitosActive) {
       setIsRequisitosOpen(true);
     }
-  }, [isRequisitosActive]);
+    setIsMobileOpen(false);
+  }, [isRequisitosActive, pathname]);
 
   const navItems = [
     { label: "Dashboard", href: "/", icon: LayoutGrid, exact: true },
@@ -62,17 +66,52 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-[#112240] dark:bg-[#090f1d] text-slate-300 flex flex-col justify-between h-screen sticky top-0 shrink-0 select-none border-r border-slate-800/80 transition-colors">
+    <>
+      {/* Botão Flutuante Mobile / Tablet (RNF.07) */}
+      <button
+        type="button"
+        onClick={() => setIsMobileOpen(true)}
+        className="lg:hidden fixed bottom-5 right-5 z-50 w-12 h-12 rounded-2xl bg-blue-600 text-white shadow-xl flex items-center justify-center hover:bg-blue-700 transition-all cursor-pointer"
+        aria-label="Abrir menu de navegação"
+        title="Menu de Navegação"
+      >
+        <Menu className="w-6 h-6" />
+      </button>
+
+      {/* Backdrop Mobile */}
+      {isMobileOpen && (
+        <div
+          onClick={() => setIsMobileOpen(false)}
+          className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-40 animate-in fade-in"
+        />
+      )}
+
+      <aside
+        className={cn(
+          "w-64 bg-[#112240] dark:bg-[#090f1d] text-slate-300 flex flex-col justify-between h-screen shrink-0 select-none border-r border-slate-800/80 transition-transform duration-200 z-50",
+          "fixed inset-y-0 left-0 lg:sticky lg:top-0 lg:translate-x-0",
+          isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}
+      >
       {/* Top Section: Brand */}
       <div>
-        <div className="flex items-center gap-3 px-6 py-6 border-b border-slate-800/60">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-900/40">
-            <Boxes className="w-6 h-6" />
+        <div className="flex items-center justify-between px-6 py-6 border-b border-slate-800/60">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-900/40">
+              <Boxes className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="font-bold text-white text-lg tracking-tight leading-none">ReqFlow</h1>
+              <span className="text-xs text-blue-300/80 font-medium">Eng. de Requisitos</span>
+            </div>
           </div>
-          <div>
-            <h1 className="font-bold text-white text-lg tracking-tight leading-none">ReqFlow</h1>
-            <span className="text-xs text-blue-300/80 font-medium">Eng. de Requisitos</span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsMobileOpen(false)}
+            className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Navigation Items */}
@@ -175,5 +214,6 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

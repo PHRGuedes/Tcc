@@ -214,6 +214,7 @@ export default function RequirementsPage() {
           }}
           userStories={userStories}
           stakeholders={stakeholders}
+          existingRequirements={requirements}
         />
       )}
 
