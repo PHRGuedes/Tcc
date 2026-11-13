@@ -27,6 +27,7 @@ import {
 import { Topbar } from "@/components/layout/topbar";
 import { PriorityBadge } from "@/components/ui/badge";
 import { useProject } from "@/components/layout/project-context";
+import { usePermissions } from "@/components/layout/permissions-context";
 import { createClient } from "@/lib/supabase/client";
 import { STORY_STATUSES } from "@/lib/constants/statuses";
 import {
@@ -990,7 +991,12 @@ function SprintBlock({
 
 export default function BacklogPage() {
   const { activeProject } = useProject();
+  const { hasPermission, guardAction } = usePermissions();
   const supabase = useMemo(() => createClient(), []);
+
+  const canManageSprints = hasPermission("sprints_manage");
+  const canDeleteSprints = hasPermission("sprints_delete");
+  const canMoveCards = hasPermission("kanban_move_cards");
 
   const [sprints, setSprints] = useState([]);
   const [stories, setStories] = useState([]);
@@ -1477,8 +1483,23 @@ export default function BacklogPage() {
             )}
 
             <button
-              onClick={() => setShowSprintModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+              onClick={() =>
+                guardAction(
+                  "sprints_manage",
+                  () => setShowSprintModal(true),
+                  "criar e planejar novas sprints"
+                )
+              }
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white rounded-xl shadow-xs transition-all ${
+                canManageSprints
+                  ? "bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                  : "bg-blue-600/70 opacity-60 hover:opacity-85 cursor-not-allowed"
+              }`}
+              title={
+                canManageSprints
+                  ? "Criar uma nova sprint neste projeto"
+                  : "Seu perfil atual não possui permissão para criar sprints neste projeto (clique para detalhes)"
+              }
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Nova Sprint</span>
@@ -1643,8 +1664,23 @@ export default function BacklogPage() {
                   </button>
                 )}
                 <button
-                  onClick={() => setShowSprintModal(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+                  onClick={() =>
+                    guardAction(
+                      "sprints_manage",
+                      () => setShowSprintModal(true),
+                      "criar e planejar novas sprints"
+                    )
+                  }
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white rounded-xl shadow-xs transition-all ${
+                    canManageSprints
+                      ? "bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                      : "bg-blue-600/70 opacity-60 hover:opacity-85 cursor-not-allowed"
+                  }`}
+                  title={
+                    canManageSprints
+                      ? "Criar uma nova sprint neste projeto"
+                      : "Seu perfil atual não possui permissão para criar sprints neste projeto"
+                  }
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Criar Nova Sprint</span>

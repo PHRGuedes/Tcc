@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_PROJECT_ROLES, ALL_PERMISSION_KEYS } from "@/lib/constants/permissions";
 
 /**
  * Server Action para cadastrar um novo projeto no Supabase
@@ -367,7 +368,10 @@ export async function inviteProjectMemberAction({ projectId, email, roleInProjec
       };
     }
 
-    const role = VALID_PROJECT_ROLES.includes(roleInProject) ? roleInProject : "developer";
+    const role =
+      roleInProject && typeof roleInProject === "string" && roleInProject.trim()
+        ? roleInProject.trim()
+        : "developer";
 
     // 4. Tentar criar convite em project_invitations
     let inviteData = null;
@@ -791,7 +795,10 @@ export async function addProjectMemberAction({ projectId, email, userId, roleInP
       };
     }
 
-    const role = VALID_PROJECT_ROLES.includes(roleInProject) ? roleInProject : "developer";
+    const role =
+      roleInProject && typeof roleInProject === "string" && roleInProject.trim()
+        ? roleInProject.trim()
+        : "developer";
 
     const { data, error } = await supabase
       .from("project_members")
@@ -866,7 +873,7 @@ export async function updateProjectMemberRoleAction({ memberId, roleInProject, p
       return { success: false, error: "Usuário não autenticado." };
     }
 
-    if (!VALID_PROJECT_ROLES.includes(roleInProject)) {
+    if (!roleInProject || typeof roleInProject !== "string" || !roleInProject.trim()) {
       return {
         success: false,
         error: "Perfil de acesso no projeto inválido.",
@@ -1031,6 +1038,351 @@ export async function removeProjectMemberAction({ memberId, projectId }) {
       success: false,
       error: "Ocorreu um erro interno ao remover o stakeholder.",
     };
+  }
+}
+
+/**
+ * Server Action para buscar as funções e permissões configuradas para um projeto.
+ * Se o projeto ainda não possuir funções salvas em project_roles, realiza o seed das 6 funções padrão.
+ */
+export async function getProjectRolesAction(projectId) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, data: DEFAULT_PROJECT_ROLES };
+    }
+
+    if (!projectId) {
+      return { success: false, data: DEFAULT_PROJECT_ROLES };
+    }
+
+    // 1. Tentar buscar da tabela project_roles
+    const { data, error } = await supabase
+      .from("project_roles")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      // Se a tabela ainda não existir no Postgres, retorna as funções padrão em memória
+      console.warn("Aviso ao buscar project_roles (usando fallback padrão):", error.message);
+      return { success: true, data: DEFAULT_PROJECT_ROLES };
+    }
+
+    // 2. Se não houver funções cadastradas para este projeto, realizar seed automático
+    if (!data || data.length === 0) {
+      const rowsToInsert = DEFAULT_PROJECT_ROLES.map((role) => ({
+        project_id: projectId,
+        name: role.name,
+        slug: role.slug,
+        description: role.description,
+        is_system: role.is_system,
+        permissions: role.permissions,
+      }));
+
+      const { data: seeded, error: seedErr } = await supabase
+        .from("project_roles")
+        .insert(rowsToInsert)
+        .select("*")
+        .order("created_at", { ascending: true });
+
+      if (seedErr) {
+        console.warn("Aviso ao realizar seed de funções:", seedErr.message);
+        return { success: true, data: DEFAULT_PROJECT_ROLES };
+      }
+
+      return { success: true, data: seeded || DEFAULT_PROJECT_ROLES };
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error("Exceção em getProjectRolesAction:", err);
+    return { success: true, data: DEFAULT_PROJECT_ROLES };
+  }
+}
+
+/**
+ * Server Action para salvar permissões editadas de uma função existente no projeto
+ */
+export async function saveProjectRoleAction({ projectId, roleId, permissions, name, description }) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    const isAdmin = await checkIsProjectAdmin(supabase, projectId, user.id);
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: "Apenas administradores do projeto podem editar permissões de funções.",
+      };
+    }
+
+    // Buscar a função alvo
+    const { data: role } = await supabase
+      .from("project_roles")
+      .select("*")
+      .eq("id", roleId)
+      .eq("project_id", projectId)
+      .maybeSingle();
+
+    if (!role) {
+      return { success: false, error: "Função não encontrada neste projeto." };
+    }
+
+    const cleanPermissions = { ...permissions };
+
+    // Se for admin, garante que permissões vitais de administração permaneçam ativas
+    if (role.slug === "admin") {
+      cleanPermissions.project_settings_manage = true;
+      cleanPermissions.project_members_manage = true;
+      cleanPermissions.project_roles_manage = true;
+    }
+
+    const updatePayload = {
+      permissions: cleanPermissions,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Funções customizadas também podem ter nome e descrição atualizados
+    if (!role.is_system) {
+      if (name?.trim()) updatePayload.name = name.trim();
+      if (description !== undefined) updatePayload.description = description.trim();
+    }
+
+    const { data: updated, error } = await supabase
+      .from("project_roles")
+      .update(updatePayload)
+      .eq("id", roleId)
+      .select("*")
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/", "layout");
+    return { success: true, data: updated };
+  } catch (err) {
+    console.error("Exceção em saveProjectRoleAction:", err);
+    return { success: false, error: "Erro interno ao salvar permissões." };
+  }
+}
+
+/**
+ * Server Action para criar uma nova função personalizada no projeto
+ */
+export async function createCustomProjectRoleAction({ projectId, name, description, permissions }) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    const isAdmin = await checkIsProjectAdmin(supabase, projectId, user.id);
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: "Apenas administradores do projeto podem criar novas funções.",
+      };
+    }
+
+    if (!name || !name.trim()) {
+      return { success: false, error: "O nome da função é obrigatório." };
+    }
+
+    const trimmedName = name.trim();
+    const baseSlug = trimmedName
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, "_")
+      .replace(/_+/g, "_")
+      .slice(0, 30);
+
+    const slug = `${baseSlug}_${Math.floor(100 + Math.random() * 900)}`;
+
+    const { data: newRole, error } = await supabase
+      .from("project_roles")
+      .insert({
+        project_id: projectId,
+        name: trimmedName,
+        slug,
+        description: description?.trim() || "Função customizada do projeto",
+        is_system: false,
+        permissions: permissions || {},
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/", "layout");
+    return { success: true, data: newRole };
+  } catch (err) {
+    console.error("Exceção em createCustomProjectRoleAction:", err);
+    return { success: false, error: "Erro interno ao criar função personalizada." };
+  }
+}
+
+/**
+ * Server Action para excluir uma função personalizada do projeto
+ */
+export async function deleteCustomProjectRoleAction({ projectId, roleId }) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    const isAdmin = await checkIsProjectAdmin(supabase, projectId, user.id);
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: "Apenas administradores do projeto podem excluir funções.",
+      };
+    }
+
+    const { data: role } = await supabase
+      .from("project_roles")
+      .select("id, slug, is_system")
+      .eq("id", roleId)
+      .eq("project_id", projectId)
+      .maybeSingle();
+
+    if (!role) {
+      return { success: false, error: "Função não encontrada." };
+    }
+
+    if (role.is_system) {
+      return {
+        success: false,
+        error: "Funções padrão do sistema não podem ser excluídas.",
+      };
+    }
+
+    // Reatribuir membros com esta função para 'developer'
+    await supabase
+      .from("project_members")
+      .update({ role_in_project: "developer" })
+      .eq("project_id", projectId)
+      .eq("role_in_project", role.slug);
+
+    const { error: delError } = await supabase
+      .from("project_roles")
+      .delete()
+      .eq("id", roleId);
+
+    if (delError) {
+      return { success: false, error: delError.message };
+    }
+
+    revalidatePath("/", "layout");
+    return { success: true };
+  } catch (err) {
+    console.error("Exceção em deleteCustomProjectRoleAction:", err);
+    return { success: false, error: "Erro interno ao excluir função." };
+  }
+}
+
+/**
+ * Server Action para buscar as permissões efetivas do usuário autenticado no projeto
+ */
+export async function getUserProjectPermissionsAction(projectId) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user || !projectId) {
+      return { success: false, permissions: {} };
+    }
+
+    // 1. Verificar se é criador do projeto -> Todas as permissões são TRUE
+    const { data: project } = await supabase
+      .from("projects")
+      .select("created_by")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (project?.created_by === user.id) {
+      const allTrue = {};
+      ALL_PERMISSION_KEYS.forEach((k) => (allTrue[k] = true));
+      return { success: true, permissions: allTrue, role: "admin", isOwner: true };
+    }
+
+    // 2. Buscar o membro em project_members
+    const { data: member } = await supabase
+      .from("project_members")
+      .select("role_in_project")
+      .eq("project_id", projectId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const roleSlug = member?.role_in_project || "developer";
+
+    if (roleSlug === "admin") {
+      const allTrue = {};
+      ALL_PERMISSION_KEYS.forEach((k) => (allTrue[k] = true));
+      return { success: true, permissions: allTrue, role: "admin", isOwner: false };
+    }
+
+    // 3. Buscar a configuração de permissões da função em project_roles
+    const { data: roleRow } = await supabase
+      .from("project_roles")
+      .select("permissions")
+      .eq("project_id", projectId)
+      .eq("slug", roleSlug)
+      .maybeSingle();
+
+    if (roleRow?.permissions && Object.keys(roleRow.permissions).length > 0) {
+      return {
+        success: true,
+        permissions: roleRow.permissions,
+        role: roleSlug,
+        isOwner: false,
+      };
+    }
+
+    // 4. Fallback padrão se não houver registro no banco
+    const defaultRole =
+      DEFAULT_PROJECT_ROLES.find((r) => r.slug === roleSlug) ||
+      DEFAULT_PROJECT_ROLES.find((r) => r.slug === "developer");
+
+    return {
+      success: true,
+      permissions: defaultRole?.permissions || {},
+      role: roleSlug,
+      isOwner: false,
+    };
+  } catch (err) {
+    console.error("Exceção em getUserProjectPermissionsAction:", err);
+    return { success: false, permissions: {} };
   }
 }
 

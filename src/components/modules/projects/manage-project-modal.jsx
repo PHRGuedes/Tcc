@@ -12,6 +12,7 @@ import {
   UserPlus,
   Trash2,
   Shield,
+  ShieldCheck,
   Code2,
   Copy,
   FileText,
@@ -21,9 +22,15 @@ import {
   Mail,
   Send,
   Clock,
+  Plus,
+  Lock,
+  Save,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { useProject } from "@/components/layout/project-context";
 import { useAuth } from "@/hooks/use-auth";
+import { usePermissions } from "@/components/layout/permissions-context";
 import {
   getProjectMembersAction,
   getProjectInvitationsAction,
@@ -31,7 +38,16 @@ import {
   cancelProjectInvitationAction,
   updateProjectMemberRoleAction,
   removeProjectMemberAction,
+  getProjectRolesAction,
+  saveProjectRoleAction,
+  createCustomProjectRoleAction,
+  deleteCustomProjectRoleAction,
 } from "@/app/actions/projects";
+import {
+  PERMISSION_GROUPS,
+  DEFAULT_PROJECT_ROLES,
+  getRoleBadgeClass,
+} from "@/lib/constants/permissions";
 import { getInitials } from "@/lib/utils/formatters";
 
 // Perfis de acesso disponíveis para atribuição exclusiva no escopo do projeto
@@ -116,6 +132,61 @@ export function ManageProjectModal({ isOpen, onClose }) {
       activeProject?.created_by === user?.id ||
       members.some((m) => m.user_id === user?.id && m.role_in_project === "admin")
   );
+
+  const { refreshPermissions } = usePermissions();
+
+  // Estado da aba Funções & Permissões
+  const [projectRoles, setProjectRoles] = useState([]);
+  const [isLoadingRoles, setIsLoadingRoles] = useState(false);
+  const [selectedRoleForPerms, setSelectedRoleForPerms] = useState(null);
+  const [editingPermissions, setEditingPermissions] = useState({});
+  const [isSavingPerms, setIsSavingPerms] = useState(false);
+  const [permsSaveSuccess, setPermsSaveSuccess] = useState(false);
+  const [permsError, setPermsError] = useState("");
+
+  // Estado para modal de criação de nova função customizada
+  const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleDesc, setNewRoleDesc] = useState("");
+  const [isCreatingRole, setIsCreatingRole] = useState(false);
+
+  // Carrega as funções e matriz de permissões do projeto
+  const loadRoles = useCallback(async () => {
+    if (!activeProject?.id) return;
+    setIsLoadingRoles(true);
+    try {
+      const res = await getProjectRolesAction(activeProject.id);
+      if (res.success && res.data) {
+        setProjectRoles(res.data);
+        setSelectedRoleForPerms((prev) => {
+          if (prev) {
+            const found = res.data.find((r) => r.id === prev.id || r.slug === prev.slug);
+            return found || res.data[0];
+          }
+          return res.data[0];
+        });
+      }
+    } catch (err) {
+      console.warn("Aviso ao carregar funções do projeto:", err);
+    } finally {
+      setIsLoadingRoles(false);
+    }
+  }, [activeProject?.id]);
+
+  useEffect(() => {
+    if (isOpen && activeProject?.id) {
+      loadRoles();
+    }
+  }, [isOpen, activeProject?.id, loadRoles]);
+
+  // Sincroniza o estado de edição quando a função selecionada muda
+  useEffect(() => {
+    if (selectedRoleForPerms) {
+      setEditingPermissions(selectedRoleForPerms.permissions || {});
+      setPermsSaveSuccess(false);
+      setPermsError("");
+    }
+  }, [selectedRoleForPerms]);
 
   // Carrega membros e convites pendentes do projeto
   useEffect(() => {
@@ -333,9 +404,132 @@ export function ManageProjectModal({ isOpen, onClose }) {
     }
   };
 
+  // Handler para alternar uma permissão na função selecionada
+  const handleTogglePermission = (permId) => {
+    if (!isCurrentUserAdmin) return;
+    // Administrador tem permissões de admin travadas
+    if (
+      selectedRoleForPerms?.slug === "admin" &&
+      (permId === "project_settings_manage" ||
+        permId === "project_members_manage" ||
+        permId === "project_roles_manage")
+    ) {
+      return;
+    }
+
+    setEditingPermissions((prev) => ({
+      ...prev,
+      [permId]: !prev[permId],
+    }));
+  };
+
+  // Handler para salvar as permissões da função
+  const handleSavePermissions = async () => {
+    if (!selectedRoleForPerms || !isCurrentUserAdmin) return;
+
+    setIsSavingPerms(true);
+    setPermsError("");
+    setPermsSaveSuccess(false);
+
+    try {
+      const res = await saveProjectRoleAction({
+        projectId: activeProject.id,
+        roleId: selectedRoleForPerms.id,
+        permissions: editingPermissions,
+        name: selectedRoleForPerms.name,
+        description: selectedRoleForPerms.description,
+      });
+
+      if (!res.success) {
+        setPermsError(res.error || "Não foi possível salvar as permissões.");
+        return;
+      }
+
+      setPermsSaveSuccess(true);
+      setProjectRoles((prev) =>
+        prev.map((r) => (r.id === selectedRoleForPerms.id ? res.data : r))
+      );
+      setSelectedRoleForPerms(res.data);
+      refreshPermissions();
+      setTimeout(() => setPermsSaveSuccess(false), 3500);
+    } catch (err) {
+      console.error("Erro ao salvar permissões:", err);
+      setPermsError("Erro interno ao salvar permissões.");
+    } finally {
+      setIsSavingPerms(false);
+    }
+  };
+
+  // Handler para criar nova função personalizada
+  const handleCreateRole = async (e) => {
+    e.preventDefault();
+    if (!newRoleName.trim() || !isCurrentUserAdmin) return;
+
+    setIsCreatingRole(true);
+    setPermsError("");
+
+    try {
+      const res = await createCustomProjectRoleAction({
+        projectId: activeProject.id,
+        name: newRoleName.trim(),
+        description: newRoleDesc.trim(),
+        permissions: {},
+      });
+
+      if (!res.success) {
+        setPermsError(res.error || "Falha ao criar função.");
+        return;
+      }
+
+      setProjectRoles((prev) => [...prev, res.data]);
+      setSelectedRoleForPerms(res.data);
+      setNewRoleName("");
+      setNewRoleDesc("");
+      setShowCreateRoleModal(false);
+      setPermsSaveSuccess(true);
+      refreshPermissions();
+      setTimeout(() => setPermsSaveSuccess(false), 3500);
+    } catch (err) {
+      console.error("Erro ao cadastrar função:", err);
+      setPermsError("Erro ao criar nova função customizada.");
+    } finally {
+      setIsCreatingRole(false);
+    }
+  };
+
+  // Handler para excluir função personalizada
+  const handleDeleteRole = async (role) => {
+    if (role.is_system || !isCurrentUserAdmin) return;
+
+    const confirmed = window.confirm(
+      `Deseja realmente remover a função "${role.name}" deste projeto? Os membros vinculados a ela serão automaticamente transferidos para Desenvolvedor.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await deleteCustomProjectRoleAction({
+        projectId: activeProject.id,
+        roleId: role.id,
+      });
+
+      if (!res.success) {
+        setPermsError(res.error || "Não foi possível excluir a função.");
+        return;
+      }
+
+      const updated = projectRoles.filter((r) => r.id !== role.id);
+      setProjectRoles(updated);
+      setSelectedRoleForPerms(updated[0] || null);
+      refreshPermissions();
+    } catch (err) {
+      console.error("Erro ao excluir função:", err);
+      setPermsError("Erro ao excluir função.");
+    }
+  };
+
   const modalContent = (
     <div className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-xs flex items-center justify-center z-[100] p-4 overflow-y-auto animate-in fade-in duration-150">
-      <div className="bg-white dark:bg-[#0f172a] rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-8 flex flex-col text-slate-900 dark:text-slate-100">
+      <div className="bg-white dark:bg-[#0f172a] rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden my-8 flex flex-col text-slate-900 dark:text-slate-100">
         {/* Header do Modal */}
         <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#0f172a]">
           <div>
@@ -346,7 +540,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Configure as informações gerais e controle os stakeholders com acesso ao projeto.
+              Configure as informações gerais, controle os stakeholders e personalize as permissões deste projeto.
             </p>
           </div>
           <button
@@ -359,11 +553,11 @@ export function ManageProjectModal({ isOpen, onClose }) {
         </div>
 
         {/* Segmented Control de Abas */}
-        <div className="px-6 pt-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 flex items-center gap-2">
+        <div className="px-6 pt-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 flex items-center gap-2 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab("general")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "general"
                 ? "border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-[#0f172a] rounded-t-lg shadow-2xs"
                 : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 rounded-t-lg"
@@ -376,7 +570,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={() => setActiveTab("stakeholders")}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === "stakeholders"
                 ? "border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-[#0f172a] rounded-t-lg shadow-2xs"
                 : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 rounded-t-lg"
@@ -387,6 +581,24 @@ export function ManageProjectModal({ isOpen, onClose }) {
             {members.length > 0 && (
               <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold">
                 {members.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("permissions")}
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === "permissions"
+                ? "border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-[#0f172a] rounded-t-lg shadow-2xs"
+                : "border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/60 dark:hover:bg-slate-800/60 rounded-t-lg"
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span>Funções & Permissões</span>
+            {projectRoles.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold">
+                {projectRoles.length}
               </span>
             )}
           </button>
@@ -566,9 +778,9 @@ export function ManageProjectModal({ isOpen, onClose }) {
                         onChange={(e) => setSelectedRole(e.target.value)}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 bg-white dark:bg-[#131c31] focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs cursor-pointer"
                       >
-                        {ALLOWED_PROJECT_ROLES.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.label}
+                        {(projectRoles.length > 0 ? projectRoles : ALLOWED_PROJECT_ROLES).map((r) => (
+                          <option key={r.slug || r.id} value={r.slug || r.id}>
+                            {r.name || r.label} {!r.is_system && r.slug ? "(Customizada)" : ""}
                           </option>
                         ))}
                       </select>
@@ -700,18 +912,16 @@ export function ManageProjectModal({ isOpen, onClose }) {
                       const isCreator =
                         member.user_id === (creatorId || activeProject?.created_by);
                       const isSelf = member.user_id === user?.id;
-                      const roleConfig =
-                        ALLOWED_PROJECT_ROLES.find((r) => r.id === member.role_in_project) || {
-                          id: member.role_in_project,
-                          label:
-                            member.role_in_project === "admin"
-                              ? "Administrador"
-                              : "Desenvolvedor",
-                          badgeClass:
-                            member.role_in_project === "admin"
-                              ? "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/50"
-                              : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50",
-                        };
+                      const availableRolesList =
+                        projectRoles.length > 0 ? projectRoles : ALLOWED_PROJECT_ROLES;
+                      const roleConfig = availableRolesList.find(
+                        (r) => (r.slug || r.id) === member.role_in_project
+                      ) || {
+                        id: member.role_in_project,
+                        name: member.role_in_project === "admin" ? "Administrador" : member.role_in_project,
+                        label: member.role_in_project === "admin" ? "Administrador" : member.role_in_project,
+                        badgeClass: getRoleBadgeClass(member.role_in_project),
+                      };
 
                       return (
                         <div
@@ -747,9 +957,9 @@ export function ManageProjectModal({ isOpen, onClose }) {
                                   </span>
                                 ) : (
                                   <span
-                                    className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${roleConfig.badgeClass}`}
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${roleConfig.badgeClass || getRoleBadgeClass(member.role_in_project)}`}
                                   >
-                                    {roleConfig.label}
+                                    {roleConfig.name || roleConfig.label}
                                   </span>
                                 )}
                               </div>
@@ -777,9 +987,9 @@ export function ManageProjectModal({ isOpen, onClose }) {
                                   : "Alterar perfil do stakeholder no projeto"
                               }
                             >
-                              {ALLOWED_PROJECT_ROLES.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.label}
+                              {availableRolesList.map((r) => (
+                                <option key={r.slug || r.id} value={r.slug || r.id}>
+                                  {r.name || r.label}
                                 </option>
                               ))}
                             </select>
@@ -820,8 +1030,368 @@ export function ManageProjectModal({ isOpen, onClose }) {
               </div>
             </div>
           )}
+
+          {/* ======================================================== */}
+          {/* ABA 3: FUNÇÕES & PERMISSÕES DO PROJETO                   */}
+          {/* ======================================================== */}
+          {activeTab === "permissions" && (
+            <div className="space-y-5">
+              {/* Notificações de Erro ou Sucesso */}
+              {permsError && (
+                <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400 text-xs font-medium flex items-start gap-2 animate-in fade-in">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{permsError}</span>
+                </div>
+              )}
+
+              {permsSaveSuccess && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs font-medium flex items-center gap-2 animate-in fade-in">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>Permissões atualizadas com sucesso para este projeto!</span>
+                </div>
+              )}
+
+              {/* Bloco Explicativo */}
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-slate-200 mb-0.5">
+                    Permissões Customizáveis do Projeto:
+                  </p>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Marque ou desmarque os checkboxes para definir exatamente o que cada função pode ou não fazer neste projeto. O Administrador pode criar novas funções sob medida.
+                  </p>
+                </div>
+                {!isCurrentUserAdmin && (
+                  <span className="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                    Modo Leitura
+                  </span>
+                )}
+              </div>
+
+              {/* Layout em 2 Colunas */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+                {/* Coluna Esquerda: Lista de Funções */}
+                <div className="md:col-span-4 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Funções ({projectRoles.length})
+                    </span>
+                    {isCurrentUserAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateRoleModal(true)}
+                        className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Nova Função</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {isLoadingRoles ? (
+                    <div className="py-8 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                      <span>Carregando funções...</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[460px] overflow-y-auto pr-1">
+                      {projectRoles.map((role) => {
+                        const isSelected =
+                          selectedRoleForPerms?.id === role.id ||
+                          selectedRoleForPerms?.slug === role.slug;
+
+                        return (
+                          <div
+                            key={role.id || role.slug}
+                            onClick={() => setSelectedRoleForPerms(role)}
+                            className={`p-2.5 rounded-xl border text-xs transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                              isSelected
+                                ? "bg-blue-50/90 dark:bg-blue-950/50 border-blue-500 dark:border-blue-500/80 shadow-xs ring-1 ring-blue-500/20"
+                                : "bg-white dark:bg-[#131c31] border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-slate-800 dark:text-slate-100 truncate">
+                                  {role.name}
+                                </span>
+                                {role.is_system ? (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                    Padrão
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                    Criada
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5">
+                                {role.description || "Sem descrição"}
+                              </p>
+                            </div>
+
+                            {/* Botão de excluir função customizada */}
+                            {!role.is_system && isCurrentUserAdmin && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteRole(role);
+                                }}
+                                className="p-1 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors"
+                                title="Excluir função customizada"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Coluna Direita: Caixas de Permissões */}
+                <div className="md:col-span-8 bg-slate-50/50 dark:bg-slate-900/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-4">
+                  {selectedRoleForPerms ? (
+                    <>
+                      {/* Cabeçalho da Função Selecionada */}
+                      <div className="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                              {selectedRoleForPerms.name}
+                            </h3>
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${getRoleBadgeClass(
+                                selectedRoleForPerms.slug
+                              )}`}
+                            >
+                              {selectedRoleForPerms.slug}
+                            </span>
+                            {selectedRoleForPerms.slug === "admin" && (
+                              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 flex items-center gap-1">
+                                <Lock className="w-3 h-3" />
+                                Perfil Master
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            {selectedRoleForPerms.description ||
+                              "Configure as permissões específicas desta função no projeto."}
+                          </p>
+                        </div>
+
+                        {/* Botão Salvar no Topo */}
+                        {isCurrentUserAdmin && (
+                          <button
+                            type="button"
+                            disabled={isSavingPerms}
+                            onClick={handleSavePermissions}
+                            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-colors disabled:opacity-60 cursor-pointer shrink-0"
+                          >
+                            {isSavingPerms ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Salvando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Save className="w-3.5 h-3.5" />
+                                <span>Salvar Permissões</span>
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Grupos de Permissões com Checkboxes */}
+                      <div className="space-y-4 max-h-[380px] overflow-y-auto pr-1">
+                        {PERMISSION_GROUPS.map((group) => (
+                          <div
+                            key={group.id}
+                            className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-2xs space-y-2.5"
+                          >
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                {group.name}
+                              </h4>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                                {group.description}
+                              </p>
+                            </div>
+
+                            <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                              {group.permissions.map((perm) => {
+                                const isChecked = Boolean(editingPermissions[perm.id]);
+                                const isLockedAdmin =
+                                  selectedRoleForPerms?.slug === "admin" &&
+                                  (perm.id === "project_settings_manage" ||
+                                    perm.id === "project_members_manage" ||
+                                    perm.id === "project_roles_manage");
+
+                                return (
+                                  <div
+                                    key={perm.id}
+                                    onClick={() => handleTogglePermission(perm.id)}
+                                    className={`py-2 px-1 flex items-start gap-2.5 transition-colors rounded-lg select-none ${
+                                      !isCurrentUserAdmin || isLockedAdmin
+                                        ? "opacity-80 cursor-default"
+                                        : "hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
+                                    }`}
+                                  >
+                                    <div className="mt-0.5 text-blue-600 dark:text-blue-400 shrink-0">
+                                      {isChecked ? (
+                                        <CheckSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                      ) : (
+                                        <Square className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span
+                                          className={`text-xs font-semibold ${
+                                            isChecked
+                                              ? "text-slate-800 dark:text-slate-100"
+                                              : "text-slate-500 dark:text-slate-400"
+                                          }`}
+                                        >
+                                          {perm.label}
+                                        </span>
+                                        {isLockedAdmin && (
+                                          <span
+                                            title="O Administrador precisa reter permissões vitais de governança"
+                                            className="text-amber-500"
+                                          >
+                                            <Lock className="w-3 h-3" />
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[11px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">
+                                        {perm.description}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Botão no Rodapé */}
+                      {isCurrentUserAdmin && (
+                        <div className="pt-2 flex items-center justify-end">
+                          <button
+                            type="button"
+                            disabled={isSavingPerms}
+                            onClick={handleSavePermissions}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors disabled:opacity-60 cursor-pointer"
+                          >
+                            {isSavingPerms ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Salvando alterações...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Salvar Permissões de {selectedRoleForPerms.name}</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="py-16 text-center text-xs text-slate-400">
+                      Selecione uma função na lista ao lado para editar suas permissões.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Botão de Fechar no rodapé */}
+              <div className="pt-4 flex items-center justify-end border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer"
+                >
+                  Concluir
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Modal Secundário: Criar Nova Função Personalizada */}
+      {showCreateRoleModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[150] p-4">
+          <div className="bg-white dark:bg-[#0f172a] rounded-2xl max-w-md w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 animate-in fade-in zoom-in-95">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Criar Nova Função para o Projeto
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Esta função existirá exclusivamente no escopo deste projeto e poderá ter seus checkboxes configurados.
+              </p>
+            </div>
+
+            <form onSubmit={handleCreateRole} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Nome da Função <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: QA / Tester, Cliente, UX Designer..."
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#131c31] text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Descrição da Função
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Qual o papel e responsabilidade desta função no projeto?"
+                  value={newRoleDesc}
+                  onChange={(e) => setNewRoleDesc(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#131c31] text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateRoleModal(false)}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingRole || !newRoleName.trim()}
+                  className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isCreatingRole ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5" />
+                  )}
+                  <span>Criar Função</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 

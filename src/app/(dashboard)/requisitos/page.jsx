@@ -7,13 +7,18 @@ import { RequirementsTable } from "@/components/modules/requirements/requirement
 import { RequirementModal } from "@/components/modules/requirements/requirement-modal";
 import { ImportRequirementsModal } from "@/components/modules/requirements/import-requirements-modal";
 import { useProject } from "@/components/layout/project-context";
+import { usePermissions } from "@/components/layout/permissions-context";
 import { createClient } from "@/lib/supabase/client";
 import { getProjectMembersAction } from "@/app/actions/projects";
 import { deleteRequirementAction } from "@/app/actions/requirements";
 
 export default function RequirementsPage() {
   const { activeProject } = useProject();
+  const { hasPermission, guardAction } = usePermissions();
   const supabase = useMemo(() => createClient(), []);
+
+  const canCreate = hasPermission("requirements_create_edit");
+  const canImport = hasPermission("requirements_import");
 
   const [requirements, setRequirements] = useState([]);
   const [userStories, setUserStories] = useState([]);
@@ -172,14 +177,20 @@ export default function RequirementsPage() {
 
   // Exclusão de requisito
   const handleDeleteRequirement = async (req) => {
-    const confirmDelete = window.confirm(
-      `Deseja realmente excluir o requisito "${req.code}" deste projeto?`
-    );
-    if (!confirmDelete) return;
+    guardAction(
+      "requirements_delete",
+      async () => {
+        const confirmDelete = window.confirm(
+          `Deseja realmente excluir o requisito "${req.code}" deste projeto?`
+        );
+        if (!confirmDelete) return;
 
-    setRequirements((prev) => prev.filter((r) => r.id !== req.id));
-    await deleteRequirementAction(req.id);
-    loadData();
+        setRequirements((prev) => prev.filter((r) => r.id !== req.id));
+        await deleteRequirementAction(req.id);
+        loadData();
+      },
+      "excluir requisitos deste projeto"
+    );
   };
 
   return (
@@ -258,9 +269,23 @@ export default function RequirementsPage() {
           <div className="flex items-center gap-2.5 flex-wrap">
             {/* Botão Importar / Reutilizar (RF.33 / RF.34) */}
             <button
-              onClick={() => setIsImportModalOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl transition-all cursor-pointer shadow-2xs"
-              title="Importar requisitos da sua biblioteca pessoal ou de outros projetos"
+              onClick={() =>
+                guardAction(
+                  "requirements_import",
+                  () => setIsImportModalOpen(true),
+                  "importar requisitos"
+                )
+              }
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl transition-all shadow-2xs ${
+                canImport
+                  ? "hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                  : "opacity-60 hover:opacity-85 cursor-not-allowed"
+              }`}
+              title={
+                canImport
+                  ? "Importar requisitos da sua biblioteca pessoal ou de outros projetos"
+                  : "Seu perfil atual não tem permissão para importar requisitos neste projeto (clique para detalhes)"
+              }
             >
               <Download className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
               <span>Importar / Reutilizar</span>
@@ -268,11 +293,26 @@ export default function RequirementsPage() {
 
             {/* Botão Novo Requisito */}
             <button
-              onClick={() => {
-                setSelectedRequirement(null);
-                setIsModalOpen(true);
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+              onClick={() =>
+                guardAction(
+                  "requirements_create_edit",
+                  () => {
+                    setSelectedRequirement(null);
+                    setIsModalOpen(true);
+                  },
+                  "criar novos requisitos"
+                )
+              }
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white rounded-xl shadow-xs transition-all ${
+                canCreate
+                  ? "bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                  : "bg-blue-600/70 opacity-60 hover:opacity-85 cursor-not-allowed"
+              }`}
+              title={
+                canCreate
+                  ? "Cadastrar novo requisito neste projeto"
+                  : "Seu perfil atual não tem permissão para criar requisitos neste projeto (clique para detalhes)"
+              }
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Novo Requisito</span>
