@@ -354,3 +354,4 @@ export async function toggleTraceabilityLinkAction({
     return { success: false, error: "Erro interno ao salvar vínculo na matriz." };
   }
 }
+
