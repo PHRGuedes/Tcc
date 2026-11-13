@@ -4,6 +4,7 @@ import {
   PRIORITY_LABELS,
   REQUIREMENT_STATUS_COLORS,
   REQUIREMENT_STATUS_LABELS,
+  normalizeRequirementStatus,
 } from "@/lib/constants/statuses";
 
 export function TypeBadge({ type, className }) {
@@ -44,10 +45,11 @@ export function PriorityBadge({ priority, className }) {
 }
 
 export function StatusBadge({ status, className }) {
+  const normalized = normalizeRequirementStatus(status);
   const style =
-    REQUIREMENT_STATUS_COLORS[status] ||
+    REQUIREMENT_STATUS_COLORS[normalized] ||
     "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700";
-  const label = REQUIREMENT_STATUS_LABELS[status] || status;
+  const label = REQUIREMENT_STATUS_LABELS[normalized] || normalized;
 
   return (
     <span

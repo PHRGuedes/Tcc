@@ -330,6 +330,19 @@ export default function RequirementsPage() {
             setIsModalOpen(true);
           }}
           onDeleteRequirement={handleDeleteRequirement}
+          onStatusChange={(id, newStatus) => {
+            setRequirements((prev) =>
+              prev.map((r) => (r.id === id ? { ...r, status: newStatus } : r))
+            );
+            const statusLabel =
+              newStatus === "approved"
+                ? "Aprovado"
+                : newStatus === "not_approved"
+                ? "Não Aprovado"
+                : "Em Análise";
+            setToastMessage(`Status do requisito atualizado para "${statusLabel}".`);
+            setTimeout(() => setToastMessage(""), 4000);
+          }}
         />
       </div>
     </>

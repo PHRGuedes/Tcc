@@ -52,39 +52,47 @@ export const PRIORITY_COLORS = {
   },
 };
 
-// Status de Requisitos com suporte a Dark Mode
+// Status de Requisitos (Ciclo de Vida: Em Análise, Aprovado, Não Aprovado)
 export const REQUIREMENT_STATUSES = {
-  PROPOSED: "proposed",
   UNDER_REVIEW: "under_review",
   APPROVED: "approved",
-  IN_DEVELOPMENT: "in_development",
-  IMPLEMENTED: "implemented",
-  CANCELLED: "cancelled",
+  NOT_APPROVED: "not_approved",
+  // Aliases de compatibilidade
+  PROPOSED: "under_review",
+  IN_DEVELOPMENT: "under_review",
+  IMPLEMENTED: "approved",
+  CANCELLED: "not_approved",
 };
 
 export const REQUIREMENT_STATUS_LABELS = {
-  [REQUIREMENT_STATUSES.PROPOSED]: "Pendente",
   [REQUIREMENT_STATUSES.UNDER_REVIEW]: "Em Análise",
   [REQUIREMENT_STATUSES.APPROVED]: "Aprovado",
-  [REQUIREMENT_STATUSES.IN_DEVELOPMENT]: "Em Desenvolvimento",
-  [REQUIREMENT_STATUSES.IMPLEMENTED]: "Implementado",
-  [REQUIREMENT_STATUSES.CANCELLED]: "Cancelado",
+  [REQUIREMENT_STATUSES.NOT_APPROVED]: "Não Aprovado",
 };
 
 export const REQUIREMENT_STATUS_COLORS = {
-  [REQUIREMENT_STATUSES.PROPOSED]:
-    "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
   [REQUIREMENT_STATUSES.UNDER_REVIEW]:
-    "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60",
+    "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/60",
   [REQUIREMENT_STATUSES.APPROVED]:
     "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60",
-  [REQUIREMENT_STATUSES.IN_DEVELOPMENT]:
-    "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/60",
-  [REQUIREMENT_STATUSES.IMPLEMENTED]:
-    "bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700",
-  [REQUIREMENT_STATUSES.CANCELLED]:
+  [REQUIREMENT_STATUSES.NOT_APPROVED]:
     "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/60",
 };
+
+export function normalizeRequirementStatus(status) {
+  if (!status) return REQUIREMENT_STATUSES.UNDER_REVIEW;
+  const s = String(status).toLowerCase();
+  if (s === "proposed" || s === "in_development" || s === "under_review") {
+    return REQUIREMENT_STATUSES.UNDER_REVIEW;
+  }
+  if (s === "implemented" || s === "approved") {
+    return REQUIREMENT_STATUSES.APPROVED;
+  }
+  if (s === "cancelled" || s === "rejected" || s === "not_approved") {
+    return REQUIREMENT_STATUSES.NOT_APPROVED;
+  }
+  return REQUIREMENT_STATUSES.UNDER_REVIEW;
+}
 
 // Status de User Stories no Kanban
 export const STORY_STATUSES = {

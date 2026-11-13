@@ -1,44 +1,44 @@
 "use client";
 
-import { FileText, Clock, CheckCircle2, Code2, Rocket } from "lucide-react";
+import { FileText, Clock, CheckCircle2, XCircle, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 export function KpiGrid({ stats }) {
   const kpis = [
     {
       title: "Total de Requisitos",
-      value: stats?.total ?? 44,
+      value: stats?.total ?? 0,
       icon: FileText,
       iconColor: "text-slate-700 dark:text-slate-300",
       iconBg: "bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700",
     },
     {
-      title: "Pendentes",
-      value: stats?.pending ?? 8,
+      title: "Em Análise",
+      value: stats?.underReview ?? 0,
       icon: Clock,
       iconColor: "text-amber-600 dark:text-amber-400",
       iconBg: "bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50",
     },
     {
       title: "Aprovados",
-      value: stats?.approved ?? 21,
+      value: stats?.approved ?? 0,
       icon: CheckCircle2,
       iconColor: "text-emerald-600 dark:text-emerald-400",
       iconBg: "bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50",
     },
     {
-      title: "Em Desenvolvimento",
-      value: stats?.inDevelopment ?? 10,
-      icon: Code2,
-      iconColor: "text-blue-600 dark:text-blue-400",
-      iconBg: "bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50",
+      title: "Não Aprovados",
+      value: stats?.notApproved ?? 0,
+      icon: XCircle,
+      iconColor: "text-rose-600 dark:text-rose-400",
+      iconBg: "bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50",
     },
     {
-      title: "Implementados",
-      value: stats?.implemented ?? 5,
-      icon: Rocket,
-      iconColor: "text-indigo-600 dark:text-indigo-400",
-      iconBg: "bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900/50",
+      title: "Histórias de Usuário",
+      value: stats?.userStories ?? 0,
+      icon: BookOpen,
+      iconColor: "text-blue-600 dark:text-blue-400",
+      iconBg: "bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50",
     },
   ];
 

@@ -6,10 +6,17 @@ import { createClient } from "@/lib/supabase/server";
 function isMissingColumnError(error) {
   if (!error) return false;
   const msg = (error.message || "").toLowerCase();
+  const details = (error.details || "").toLowerCase();
+  const hint = (error.hint || "").toLowerCase();
   const code = error.code || "";
   return (
     msg.includes("project_id") ||
+    msg.includes("user_id") ||
     msg.includes("schema cache") ||
+    msg.includes("column") ||
+    details.includes("project_id") ||
+    details.includes("user_id") ||
+    hint.includes("project_id") ||
     code === "PGRST204" ||
     code === "42703"
   );
@@ -97,7 +104,7 @@ export async function createRequirementAction(payload) {
       description,
       type = "RF",
       priority = "medium",
-      status = "proposed",
+      status = "under_review",
       justification = "",
       source = "",
       acceptanceCriteria = "",
@@ -225,7 +232,7 @@ export async function createRequirementAction(payload) {
           description: description?.trim() || title?.trim(),
           type,
           priority,
-          status: status || "proposed",
+          status: status || "under_review",
           justification: justification?.trim() || null,
           source: source?.trim() || (scope === "global" ? "Biblioteca Pessoal" : null),
           acceptance_criteria: acceptanceCriteria?.trim() || null,
@@ -233,11 +240,25 @@ export async function createRequirementAction(payload) {
           created_by: user.id,
         };
 
-        const fallbackRes = await supabase
+        let fallbackRes = await supabase
           .from("requirements")
           .insert(fallbackData)
           .select()
           .single();
+
+        // Se falhar pela constraint de status antiga que não aceita 'not_approved'
+        if (
+          fallbackRes.error &&
+          fallbackRes.error.message?.includes("requirements_status_check") &&
+          fallbackData.status === "not_approved"
+        ) {
+          fallbackData.status = "cancelled";
+          fallbackRes = await supabase
+            .from("requirements")
+            .insert(fallbackData)
+            .select()
+            .single();
+        }
 
         if (fallbackRes.error) {
           insertError = fallbackRes.error;
@@ -620,7 +641,7 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
         description: original.description,
         type: original.type,
         priority: original.priority,
-        status: "proposed",
+        status: "under_review",
         justification: original.justification,
         source: original.source ? `Reutilizado: ${original.source}` : "Importado e reutilizado",
         acceptance_criteria: original.acceptance_criteria,
@@ -690,5 +711,115 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
   } catch (err) {
     console.error("Erro inesperado em importRequirementToProjectAction:", err);
     return { success: false, error: "Erro interno ao importar requisitos." };
+  }
+}
+
+/**
+ * Server Action para aprovação rápida ou alteração direta de status do requisito.
+ * Suporta os 3 status simplificados: 'under_review' (Em Análise), 'approved' (Aprovado), 'not_approved' (Não Aprovado).
+ */
+export async function updateRequirementStatusAction({ id, status, projectId }) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    if (!id || !status) {
+      return { success: false, error: "ID e status são obrigatórios." };
+    }
+
+    const validStatuses = ["under_review", "approved", "not_approved"];
+    if (!validStatuses.includes(status)) {
+      return { success: false, error: "Status do requisito inválido." };
+    }
+
+    // 1. Obter dados do requisito
+    let targetProjId = projectId;
+    let reqCode = "REQ";
+
+    try {
+      const { data: req } = await supabase
+        .from("requirements")
+        .select("id, code, title")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (req) {
+        reqCode = req.code;
+      }
+    } catch {}
+
+    // 2. Atualizar status no banco
+    let { data: updated, error: updateErr } = await supabase
+      .from("requirements")
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select()
+      .single();
+
+    // Fallback se constraint antiga não aceitar 'not_approved'
+    if (
+      updateErr &&
+      updateErr.message?.includes("requirements_status_check") &&
+      status === "not_approved"
+    ) {
+      const retryRes = await supabase
+        .from("requirements")
+        .update({
+          status: "cancelled",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (!retryRes.error) {
+        updated = { ...retryRes.data, status: "not_approved" };
+        updateErr = null;
+      }
+    }
+
+    if (updateErr) {
+      return { success: false, error: updateErr.message };
+    }
+
+    // 3. Registrar na auditoria
+    if (targetProjId) {
+      const statusActionText =
+        status === "approved"
+          ? "aprovou o requisito"
+          : status === "not_approved"
+          ? "reprovou (marcou como Não Aprovado) o requisito"
+          : "colocou o requisito em análise";
+
+      try {
+        await supabase.from("audit_logs").insert({
+          project_id: targetProjId,
+          user_id: user.id,
+          entity_type: "requirement",
+          entity_id: id,
+          action: "updated",
+          description: `${statusActionText} ${reqCode}`,
+        });
+      } catch (auditErr) {
+        console.warn("Aviso ao registrar auditoria de status:", auditErr);
+      }
+    }
+
+    revalidatePath("/", "layout");
+    revalidatePath("/requisitos");
+    return { success: true, data: updated };
+  } catch (err) {
+    console.error("Exceção em updateRequirementStatusAction:", err);
+    return { success: false, error: "Erro interno ao atualizar status do requisito." };
   }
 }

@@ -12,10 +12,10 @@ export default function DashboardPage() {
   const { activeProject } = useProject();
   const [stats, setStats] = useState({
     total: 0,
-    pending: 0,
+    underReview: 0,
     approved: 0,
-    inDevelopment: 0,
-    implemented: 0,
+    notApproved: 0,
+    userStories: 0,
   });
   const [activities, setActivities] = useState([]);
   const supabase = useMemo(() => createClient(), []);
@@ -25,51 +25,87 @@ export default function DashboardPage() {
       if (!activeProject?.id) return;
 
       try {
-        // Buscar contagem de requisitos vinculados ao projeto ativo
-        const { data: linked } = await supabase
-          .from("project_requirements")
-          .select("requirement:requirements(id, status)")
-          .eq("project_id", activeProject.id);
+        // 1. Buscar requisitos vinculados ao projeto (tentando via project_id direto e fallback via project_requirements)
+        let reqs = [];
+        try {
+          const { data: directReqs, error: directErr } = await supabase
+            .from("requirements")
+            .select("id, status")
+            .eq("project_id", activeProject.id);
 
-        const reqs = (linked || []).map((l) => l.requirement).filter(Boolean);
+          if (!directErr && directReqs && directReqs.length > 0) {
+            reqs = directReqs;
+          }
+        } catch {}
+
+        if (reqs.length === 0) {
+          try {
+            const { data: linked } = await supabase
+              .from("project_requirements")
+              .select("requirement:requirements(id, status)")
+              .eq("project_id", activeProject.id);
+
+            if (linked) {
+              reqs = linked.map((l) => l.requirement).filter(Boolean);
+            }
+          } catch {}
+        }
+
+        // 2. Buscar total de User Stories do projeto
+        let userStoriesCount = 0;
+        try {
+          const { count, error: usErr } = await supabase
+            .from("user_stories")
+            .select("id", { count: "exact", head: true })
+            .eq("project_id", activeProject.id);
+
+          if (!usErr && typeof count === "number") {
+            userStoriesCount = count;
+          }
+        } catch {}
 
         if (reqs && reqs.length > 0) {
           const total = reqs.length;
-          const pending = reqs.filter(
-            (r) => r.status === "proposed" || r.status === "under_review"
+          const underReview = reqs.filter(
+            (r) =>
+              r.status === "under_review" ||
+              r.status === "proposed" ||
+              r.status === "in_development"
           ).length;
-          const approved = reqs.filter((r) => r.status === "approved").length;
-          const inDevelopment = reqs.filter(
-            (r) => r.status === "in_development"
+          const approved = reqs.filter(
+            (r) => r.status === "approved" || r.status === "implemented"
           ).length;
-          const implemented = reqs.filter(
-            (r) => r.status === "implemented"
+          const notApproved = reqs.filter(
+            (r) =>
+              r.status === "not_approved" ||
+              r.status === "cancelled" ||
+              r.status === "rejected"
           ).length;
 
           setStats({
             total,
-            pending,
+            underReview,
             approved,
-            inDevelopment,
-            implemented,
+            notApproved,
+            userStories: userStoriesCount,
           });
         } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
           // Projeto mock inicial
           setStats({
             total: 44,
-            pending: 8,
+            underReview: 18,
             approved: 21,
-            inDevelopment: 10,
-            implemented: 5,
+            notApproved: 5,
+            userStories: 12,
           });
         } else {
           // Projeto novo vazio
           setStats({
             total: 0,
-            pending: 0,
+            underReview: 0,
             approved: 0,
-            inDevelopment: 0,
-            implemented: 0,
+            notApproved: 0,
+            userStories: userStoriesCount,
           });
         }
 
@@ -106,10 +142,9 @@ export default function DashboardPage() {
   }, [activeProject?.id, supabase]);
 
   const chartData = [
-    { name: "Aprovados", value: stats.approved, color: "#16a34a" },
-    { name: "Em Desenvolvimento", value: stats.inDevelopment, color: "#2563eb" },
-    { name: "Pendentes", value: stats.pending, color: "#d97706" },
-    { name: "Implementados", value: stats.implemented, color: "#1e293b" },
+    { name: "Aprovados", value: stats.approved, color: "#10b981" },
+    { name: "Em Análise", value: stats.underReview, color: "#f59e0b" },
+    { name: "Não Aprovados", value: stats.notApproved, color: "#f43f5e" },
   ];
 
   return (

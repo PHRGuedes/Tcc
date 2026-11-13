@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Search, Eye, Pencil, Trash2, AlertTriangle, Layers, Globe } from "lucide-react";
+import { Search, Eye, Pencil, Trash2, AlertTriangle, Layers, Globe, Check, X, RotateCcw, Loader2 } from "lucide-react";
 import { TypeBadge, PriorityBadge, StatusBadge } from "@/components/ui/badge";
+import { usePermissions } from "@/components/layout/permissions-context";
+import { updateRequirementStatusAction } from "@/app/actions/requirements";
 import {
   PRIORITIES,
   PRIORITY_LABELS,
@@ -17,11 +19,43 @@ export function RequirementsTable({
   loading = false,
   onSelectRequirement,
   onDeleteRequirement,
+  onStatusChange,
 }) {
+  const { hasPermission, guardAction } = usePermissions();
+  const canApprove = hasPermission("requirements_approve");
+  const [actionInProgressId, setActionInProgressId] = useState(null);
+
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+
+  const handleStatusClick = async (req, newStatus) => {
+    guardAction(
+      "requirements_approve",
+      async () => {
+        setActionInProgressId(req.id);
+        try {
+          const res = await updateRequirementStatusAction({
+            id: req.id,
+            status: newStatus,
+          });
+          if (res.success) {
+            if (typeof onStatusChange === "function") {
+              onStatusChange(req.id, newStatus);
+            }
+          } else {
+            alert(res.error || "Não foi possível atualizar o status.");
+          }
+        } catch (err) {
+          console.error("Erro ao alterar status:", err);
+        } finally {
+          setActionInProgressId(null);
+        }
+      },
+      "aprovar ou alterar o status deste requisito"
+    );
+  };
 
   // Filtragem dinâmica
   const filteredRequirements = useMemo(() => {
@@ -144,7 +178,7 @@ export function RequirementsTable({
                 <th className="py-4 px-6">Descrição</th>
                 <th className="py-4 px-6 w-24">Tipo</th>
                 <th className="py-4 px-6 w-32">Prioridade</th>
-                {scope === "project" && <th className="py-4 px-6 w-36">Status</th>}
+                {scope === "project" && <th className="py-4 px-6 w-60">Status & Decisão</th>}
                 <th className="py-4 px-6 w-44">
                   {scope === "project" ? "Responsável" : "Origem"}
                 </th>
@@ -210,10 +244,77 @@ export function RequirementsTable({
                       <PriorityBadge priority={req.priority} />
                     </td>
 
-                    {/* Status (se projeto) */}
+                    {/* Status & Decisão Direta (se projeto) */}
                     {scope === "project" && (
                       <td className="py-4 px-6">
-                        <StatusBadge status={req.status || "proposed"} />
+                        <div className="flex flex-col gap-2 items-start">
+                          <StatusBadge status={req.status || "under_review"} />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* Botão Aprovar Requisito */}
+                            {req.status !== "approved" && (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusClick(req, "approved")}
+                                disabled={actionInProgressId === req.id}
+                                title={
+                                  canApprove
+                                    ? "Aprovar requisito diretamente (1 clique)"
+                                    : "Apenas perfis com permissão podem aprovar requisitos neste projeto"
+                                }
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800/60 shadow-2xs transition-all cursor-pointer ${
+                                  !canApprove ? "opacity-60 hover:opacity-85" : ""
+                                }`}
+                              >
+                                {actionInProgressId === req.id ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  <Check className="w-3 h-3" />
+                                )}
+                                <span>Aprovar</span>
+                              </button>
+                            )}
+
+                            {/* Botão Não Aprovar */}
+                            {req.status !== "not_approved" && (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusClick(req, "not_approved")}
+                                disabled={actionInProgressId === req.id}
+                                title={
+                                  canApprove
+                                    ? "Marcar como Não Aprovado"
+                                    : "Apenas perfis com permissão podem desaprovar requisitos neste projeto"
+                                }
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-800/60 shadow-2xs transition-all cursor-pointer ${
+                                  !canApprove ? "opacity-60 hover:opacity-85" : ""
+                                }`}
+                              >
+                                <X className="w-3 h-3" />
+                                <span>Não Aprovar</span>
+                              </button>
+                            )}
+
+                            {/* Botão Reavaliar (voltar para Em Análise) */}
+                            {req.status !== "under_review" && req.status && (
+                              <button
+                                type="button"
+                                onClick={() => handleStatusClick(req, "under_review")}
+                                disabled={actionInProgressId === req.id}
+                                title={
+                                  canApprove
+                                    ? "Reabrir para Em Análise"
+                                    : "Apenas perfis com permissão podem alterar status do requisito"
+                                }
+                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800/50 shadow-2xs transition-all cursor-pointer ${
+                                  !canApprove ? "opacity-60 hover:opacity-85" : ""
+                                }`}
+                              >
+                                <RotateCcw className="w-2.5 h-2.5" />
+                                <span>Reavaliar</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </td>
                     )}
 

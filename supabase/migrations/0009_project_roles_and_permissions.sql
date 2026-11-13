@@ -97,3 +97,4 @@ CREATE POLICY "project_roles_delete"
     );
 
 NOTIFY pgrst, 'reload schema';
+

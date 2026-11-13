@@ -2,16 +2,18 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, History, Send, AlertTriangle, Globe, FolderKanban } from "lucide-react";
+import { X, History, Send, AlertTriangle, Globe, FolderKanban, Check, XCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useProject } from "@/components/layout/project-context";
+import { usePermissions } from "@/components/layout/permissions-context";
 import {
   PRIORITIES,
   PRIORITY_LABELS,
   REQUIREMENT_STATUSES,
   REQUIREMENT_STATUS_LABELS,
   REQUIREMENT_TYPES,
+  normalizeRequirementStatus,
 } from "@/lib/constants/statuses";
 import {
   createRequirementAction,
@@ -44,7 +46,7 @@ export function RequirementModal({
     description: "",
     justification: "",
     priority: PRIORITIES.MEDIUM,
-    status: REQUIREMENT_STATUSES.PROPOSED,
+    status: REQUIREMENT_STATUSES.UNDER_REVIEW,
     source: "",
     acceptance_criteria: "",
     user_story_id: "",
@@ -71,7 +73,7 @@ export function RequirementModal({
         description: requirement.description || "",
         justification: requirement.justification || "",
         priority: requirement.priority || PRIORITIES.MEDIUM,
-        status: requirement.status || REQUIREMENT_STATUSES.PROPOSED,
+        status: normalizeRequirementStatus(requirement.status),
         source: requirement.source || "",
         acceptance_criteria: requirement.acceptance_criteria || "",
         user_story_id: requirement.user_story_id || "",
@@ -123,7 +125,7 @@ export function RequirementModal({
         description: "",
         justification: "",
         priority: PRIORITIES.MEDIUM,
-        status: REQUIREMENT_STATUSES.PROPOSED,
+        status: REQUIREMENT_STATUSES.UNDER_REVIEW,
         source: scope === "global" ? "Biblioteca Pessoal" : "",
         acceptance_criteria: "",
         user_story_id: userStories[0]?.id || "",

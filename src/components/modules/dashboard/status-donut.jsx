@@ -2,13 +2,17 @@
 
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
-export function StatusDonutChart({ data, total = 44 }) {
+export function StatusDonutChart({ data, total = 0 }) {
   const chartData = data || [
-    { name: "Aprovados", value: 21, color: "#16a34a" },
-    { name: "Em Desenvolvimento", value: 10, color: "#2563eb" },
-    { name: "Pendentes", value: 8, color: "#d97706" },
-    { name: "Implementados", value: 5, color: "#64748b" },
+    { name: "Aprovados", value: 0, color: "#10b981" },
+    { name: "Em Análise", value: 0, color: "#f59e0b" },
+    { name: "Não Aprovados", value: 0, color: "#f43f5e" },
   ];
+
+  const hasData = chartData.some((d) => d.value > 0);
+  const displayData = hasData
+    ? chartData
+    : [{ name: "Sem dados", value: 1, color: "#94a3b8" }];
 
   return (
     <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between transition-colors h-full">
@@ -25,15 +29,15 @@ export function StatusDonutChart({ data, total = 44 }) {
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={chartData}
+              data={displayData}
               cx="50%"
               cy="50%"
               innerRadius={65}
               outerRadius={95}
-              paddingAngle={3}
+              paddingAngle={hasData ? 3 : 0}
               dataKey="value"
             >
-              {chartData.map((entry, index) => (
+              {displayData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
               ))}
             </Pie>
