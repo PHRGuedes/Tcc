@@ -94,3 +94,4 @@ CREATE POLICY "requirements_delete"
         OR
         (project_id IS NULL AND COALESCE(user_id, created_by) = auth.uid())
     );
+
