@@ -3,6 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
+function isMissingColumnError(error) {
+  if (!error) return false;
+  const msg = (error.message || "").toLowerCase();
+  const code = error.code || "";
+  return (
+    msg.includes("project_id") ||
+    msg.includes("schema cache") ||
+    code === "PGRST204" ||
+    code === "42703"
+  );
+}
+
 /**
  * Criação de Requisito com suporte a Scope (Project ou Global)
  * - scope === 'global': Biblioteca Pessoal (project_id = null, status = null)
@@ -50,38 +62,74 @@ export async function createRequirementAction(payload) {
       return { success: false, error: "Projeto de destino não informado para requisito de projeto." };
     }
 
-    // 1. Checagem prévia contextual de unicidade no banco
+    // 1. Checagem prévia contextual de unicidade no banco (com tolerância a ausência da coluna project_id)
     if (scope === "project") {
-      // Verificar se já existe com o mesmo código no projeto ativo
-      const { data: existingProjectReq } = await supabase
-        .from("requirements")
-        .select("id, code, project_id")
-        .eq("code", normalizedCode)
-        .eq("project_id", projectId)
-        .maybeSingle();
+      try {
+        const { data: existingProjectReq, error: checkErr } = await supabase
+          .from("requirements")
+          .select("id, code, project_id")
+          .eq("code", normalizedCode)
+          .eq("project_id", projectId)
+          .maybeSingle();
 
-      if (existingProjectReq) {
-        return {
-          success: false,
-          error: `Já existe um requisito com o código "${normalizedCode}" neste projeto.`,
-        };
-      }
+        if (!checkErr && existingProjectReq) {
+          return {
+            success: false,
+            error: `Já existe um requisito com o código "${normalizedCode}" neste projeto.`,
+          };
+        }
+
+        // Fallback se project_id ainda não existir no schema cache
+        if (checkErr && isMissingColumnError(checkErr)) {
+          const { data: linkedCheck } = await supabase
+            .from("project_requirements")
+            .select("requirement_id, requirements!inner(id, code)")
+            .eq("project_id", projectId)
+            .eq("requirements.code", normalizedCode)
+            .maybeSingle();
+
+          if (linkedCheck) {
+            return {
+              success: false,
+              error: `Já existe um requisito com o código "${normalizedCode}" neste projeto.`,
+            };
+          }
+        }
+      } catch {}
     } else {
-      // Verificar se o usuário já possui este código na sua Biblioteca Global
-      const { data: existingGlobalReq } = await supabase
-        .from("requirements")
-        .select("id, code, created_by")
-        .eq("code", normalizedCode)
-        .is("project_id", null)
-        .eq("created_by", user.id)
-        .maybeSingle();
+      try {
+        const { data: existingGlobalReq, error: checkErr } = await supabase
+          .from("requirements")
+          .select("id, code, created_by")
+          .eq("code", normalizedCode)
+          .is("project_id", null)
+          .eq("created_by", user.id)
+          .maybeSingle();
 
-      if (existingGlobalReq) {
-        return {
-          success: false,
-          error: `Você já possui um requisito global com o código "${normalizedCode}".`,
-        };
-      }
+        if (!checkErr && existingGlobalReq) {
+          return {
+            success: false,
+            error: `Você já possui um requisito global com o código "${normalizedCode}".`,
+          };
+        }
+
+        // Fallback se project_id ainda não existir no schema cache
+        if (checkErr && isMissingColumnError(checkErr)) {
+          const { data: userReq } = await supabase
+            .from("requirements")
+            .select("id, code")
+            .eq("code", normalizedCode)
+            .eq("created_by", user.id)
+            .maybeSingle();
+
+          if (userReq) {
+            return {
+              success: false,
+              error: `Você já possui um requisito global com o código "${normalizedCode}".`,
+            };
+          }
+        }
+      } catch {}
     }
 
     const reqData = {
@@ -100,7 +148,7 @@ export async function createRequirementAction(payload) {
       project_id: scope === "global" ? null : projectId,
     };
 
-    // Tentar inserção direta com project_id
+    // 2. Tentar inserção direta com project_id
     let newReq = null;
     let insertError = null;
 
@@ -111,13 +159,22 @@ export async function createRequirementAction(payload) {
       .single();
 
     if (insertRes.error) {
-      // Se a coluna project_id ainda não existir no banco (antes de rodar a migração 0007),
-      // faz fallback salvando sem project_id e vinculando via project_requirements
-      if (insertRes.error.code === "42703") {
-        const fallbackData = { ...reqData };
-        delete fallbackData.project_id;
-        delete fallbackData.user_id;
-        if (scope === "global") fallbackData.status = "proposed";
+      // Se a coluna project_id ainda não existe no schema cache do Supabase (migração 0007 ainda não executada),
+      // faz fallback salvando com os campos padrão e associando via project_requirements.
+      if (isMissingColumnError(insertRes.error)) {
+        const fallbackData = {
+          code: normalizedCode,
+          title: title?.trim() || description?.trim().slice(0, 50) || "Sem título",
+          description: description?.trim() || title?.trim(),
+          type,
+          priority,
+          status: status || "proposed",
+          justification: justification?.trim() || null,
+          source: source?.trim() || (scope === "global" ? "Biblioteca Pessoal" : null),
+          acceptance_criteria: acceptanceCriteria?.trim() || null,
+          responsible_id: responsibleId || null,
+          created_by: user.id,
+        };
 
         const fallbackRes = await supabase
           .from("requirements")
@@ -150,7 +207,7 @@ export async function createRequirementAction(payload) {
       return { success: false, error: `Erro ao criar requisito: ${insertError.message}` };
     }
 
-    // 2. Se for requisito de projeto, garantir registro associativo em project_requirements
+    // 3. Se for requisito de projeto, garantir registro associativo em project_requirements
     if (scope === "project" && projectId && newReq?.id) {
       try {
         await supabase.from("project_requirements").insert({
@@ -174,7 +231,7 @@ export async function createRequirementAction(payload) {
       }
     }
 
-    // 3. Registrar Versão Inicial
+    // 4. Registrar Versão Inicial
     try {
       await supabase.from("requirement_versions").insert({
         requirement_id: newReq.id,
@@ -353,12 +410,30 @@ export async function getAvailableRequirementsForImportAction(targetProjectId) {
     }
 
     // 1. Requisitos Globais do Usuário
-    const { data: globalReqs, error: globalErr } = await supabase
+    let globalReqs = [];
+    const { data: gData, error: gErr } = await supabase
       .from("requirements")
       .select("*")
       .is("project_id", null)
       .eq("created_by", user.id)
       .order("code", { ascending: true });
+
+    if (!gErr && gData) {
+      globalReqs = gData;
+    } else {
+      // Fallback caso a coluna project_id ainda não exista
+      const { data: allUserReqs } = await supabase
+        .from("requirements")
+        .select("*")
+        .eq("created_by", user.id)
+        .order("code", { ascending: true });
+
+      if (allUserReqs && allUserReqs.length > 0) {
+        const { data: linked } = await supabase.from("project_requirements").select("requirement_id");
+        const linkedSet = new Set((linked || []).map((l) => l.requirement_id));
+        globalReqs = allUserReqs.filter((r) => !linkedSet.has(r.id) || r.source?.includes("Biblioteca"));
+      }
+    }
 
     // 2. Requisitos de outros projetos vinculados ao usuário
     let otherProjectReqs = [];
@@ -438,12 +513,31 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
     }
 
     // 2. Buscar códigos já existentes no projeto de destino para evitar conflito
-    const { data: targetExisting } = await supabase
-      .from("requirements")
-      .select("code")
-      .eq("project_id", targetProjectId);
+    let existingCodes = new Set();
+    try {
+      const { data: targetExisting, error: targetErr } = await supabase
+        .from("requirements")
+        .select("code, project_id")
+        .eq("project_id", targetProjectId);
 
-    const existingCodes = new Set((targetExisting || []).map((r) => r.code?.toUpperCase()));
+      if (!targetErr && targetExisting) {
+        existingCodes = new Set(targetExisting.map((r) => r.code?.toUpperCase()));
+      } else {
+        // Fallback via project_requirements
+        const { data: linkedData } = await supabase
+          .from("project_requirements")
+          .select("requirement:requirements(code)")
+          .eq("project_id", targetProjectId);
+
+        if (linkedData) {
+          existingCodes = new Set(
+            linkedData
+              .map((l) => l.requirement?.code?.toUpperCase())
+              .filter(Boolean)
+          );
+        }
+      }
+    } catch {}
 
     let importedCount = 0;
     const importedCodes = [];
@@ -469,11 +563,11 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
         description: original.description,
         type: original.type,
         priority: original.priority,
-        status: "proposed", // Conforme especificação do TCC: importados iniciam como 'proposto'
+        status: "proposed",
         justification: original.justification,
         source: original.source ? `Reutilizado: ${original.source}` : "Importado e reutilizado",
         acceptance_criteria: original.acceptance_criteria,
-        responsible_id: null, // Deixa aberto para atribuição no novo projeto
+        responsible_id: null,
         created_by: user.id,
         user_id: user.id,
         project_id: targetProjectId,
@@ -487,7 +581,7 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
         .select()
         .single();
 
-      if (insertRes.error && insertRes.error.code === "42703") {
+      if (insertRes.error && isMissingColumnError(insertRes.error)) {
         // Fallback sem project_id caso a coluna ainda não exista no Postgres
         const fallbackData = { ...clonePayload };
         delete fallbackData.project_id;
@@ -541,4 +635,3 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
     return { success: false, error: "Erro interno ao importar requisitos." };
   }
 }
-

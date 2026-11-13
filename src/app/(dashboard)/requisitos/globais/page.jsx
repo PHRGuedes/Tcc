@@ -25,40 +25,74 @@ export default function GlobalRequirementsPage() {
   const loadGlobalRequirements = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Buscar requisitos onde project_id IS NULL pertencentes ao usuário autenticado
-      let query = supabase
-        .from("requirements")
-        .select("*")
-        .is("project_id", null);
+      // 1. Tentar buscar requisitos onde project_id IS NULL pertencentes ao usuário autenticado
+      let globalList = null;
+      try {
+        let query = supabase
+          .from("requirements")
+          .select("*")
+          .is("project_id", null);
 
-      if (user?.id) {
-        query = query.eq("created_by", user.id);
+        if (user?.id) {
+          query = query.eq("created_by", user.id);
+        }
+
+        const { data, error } = await query.order("code", { ascending: true });
+        if (!error && data) {
+          globalList = data;
+        }
+      } catch {}
+
+      // 2. Fallback caso a coluna project_id ainda não exista no schema cache do Supabase
+      if (!globalList) {
+        try {
+          let userQuery = supabase.from("requirements").select("*");
+          if (user?.id) {
+            userQuery = userQuery.eq("created_by", user.id);
+          }
+          const { data: userReqs } = await userQuery.order("code", { ascending: true });
+
+          if (userReqs && userReqs.length > 0) {
+            const { data: linked } = await supabase
+              .from("project_requirements")
+              .select("requirement_id");
+            const linkedSet = new Set((linked || []).map((l) => l.requirement_id));
+            const filtered = userReqs.filter(
+              (r) => !linkedSet.has(r.id) || r.source?.includes("Biblioteca")
+            );
+            if (filtered.length > 0) {
+              globalList = filtered;
+            }
+          }
+        } catch {}
       }
 
-      const { data, error } = await query.order("code", { ascending: true });
-
-      if (!error && data) {
-        setRequirements(data);
+      if (globalList && globalList.length > 0) {
+        setRequirements(globalList);
       } else {
-        // Fallback para demonstração se ainda não houver nenhum
+        // Fallback para demonstração se a biblioteca ainda estiver vazia
         setRequirements([
           {
             id: "g-01",
             code: "RF-G01",
             title: "Padrão de Autenticação Segura (OAuth / JWT)",
-            description: "O sistema deve autenticar usuários utilizando tokens JWT com rotação periódica e suporte a MFA.",
+            description:
+              "O sistema deve autenticar usuários utilizando tokens JWT com rotação periódica e suporte a MFA.",
             type: "RF",
             priority: "high",
             source: "Biblioteca Pessoal — Arquitetura de Segurança",
-            justification: "Garantir conformidade com OWASP e proteção contra vazamento de credenciais.",
-            acceptance_criteria: "Tokens expirados devem ser rejeitados; MFA obrigatório para administradores.",
+            justification:
+              "Garantir conformidade com OWASP e proteção contra vazamento de credenciais.",
+            acceptance_criteria:
+              "Tokens expirados devem ser rejeitados; MFA obrigatório para administradores.",
             is_incomplete: false,
           },
           {
             id: "g-02",
             code: "RNF-G02",
             title: "Tempo de Resposta de APIs REST",
-            description: "Endpoints da API devem responder 95% das requisições em menos de 300ms sob carga normal.",
+            description:
+              "Endpoints da API devem responder 95% das requisições em menos de 300ms sob carga normal.",
             type: "RNF",
             priority: "medium",
             source: "Biblioteca Pessoal — Performance Baseline",
