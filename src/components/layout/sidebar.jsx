@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -11,22 +12,54 @@ import {
   Network,
   BarChart2,
   LogOut,
+  ChevronDown,
+  ChevronRight,
+  FolderKanban,
+  Globe,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils/cn";
 
-const NAV_ITEMS = [
-  { label: "Dashboard", href: "/", icon: LayoutGrid, exact: true },
-  { label: "Requisitos", href: "/requisitos", icon: FileText },
-  { label: "User Stories", href: "/user-stories", icon: BookOpen },
-  { label: "Backlog", href: "/backlog", icon: Layers },
-  { label: "Rastreabilidade", href: "/rastreabilidade", icon: Network },
-  { label: "Relatórios", href: "/relatorios", icon: BarChart2 },
-];
-
 export function Sidebar() {
   const pathname = usePathname();
   const { signOut } = useAuth();
+
+  const isRequisitosActive = pathname.startsWith("/requisitos");
+  const [isRequisitosOpen, setIsRequisitosOpen] = useState(isRequisitosActive);
+
+  // Mantém aberto se a rota ativa for de requisitos
+  useEffect(() => {
+    if (isRequisitosActive) {
+      setIsRequisitosOpen(true);
+    }
+  }, [isRequisitosActive]);
+
+  const navItems = [
+    { label: "Dashboard", href: "/", icon: LayoutGrid, exact: true },
+    {
+      label: "Requisitos",
+      icon: FileText,
+      isCollapsible: true,
+      subItems: [
+        {
+          label: "Requisitos do Projeto",
+          href: "/requisitos",
+          icon: FolderKanban,
+          exact: true,
+        },
+        {
+          label: "Biblioteca Global",
+          href: "/requisitos/globais",
+          icon: Globe,
+          exact: true,
+        },
+      ],
+    },
+    { label: "User Stories", href: "/user-stories", icon: BookOpen },
+    { label: "Backlog", href: "/backlog", icon: Layers },
+    { label: "Rastreabilidade", href: "/rastreabilidade", icon: Network },
+    { label: "Relatórios", href: "/relatorios", icon: BarChart2 },
+  ];
 
   return (
     <aside className="w-64 bg-[#112240] dark:bg-[#090f1d] text-slate-300 flex flex-col justify-between h-screen sticky top-0 shrink-0 select-none border-r border-slate-800/80 transition-colors">
@@ -44,8 +77,70 @@ export function Sidebar() {
 
         {/* Navigation Items */}
         <nav className="px-3 mt-4 space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
+
+            // Se for item colapsável (Requisitos)
+            if (item.isCollapsible) {
+              const isAnySubActive = item.subItems.some((sub) =>
+                sub.exact ? pathname === sub.href : pathname.startsWith(sub.href)
+              );
+
+              return (
+                <div key={item.label} className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsRequisitosOpen((prev) => !prev)}
+                    className={cn(
+                      "w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer",
+                      isAnySubActive && !isRequisitosOpen
+                        ? "bg-blue-600/20 text-blue-400 font-semibold"
+                        : "text-slate-300 hover:text-white hover:bg-white/5 dark:hover:bg-slate-800/50"
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className={cn("w-5 h-5", isAnySubActive ? "text-blue-400" : "text-slate-400")} />
+                      <span>{item.label}</span>
+                    </div>
+                    {isRequisitosOpen ? (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
+
+                  {/* Subitems do Accordion */}
+                  {isRequisitosOpen && (
+                    <div className="pl-4 pr-1 py-1 space-y-1 border-l-2 border-slate-700/60 ml-5 my-0.5 animate-in fade-in duration-200">
+                      {item.subItems.map((sub) => {
+                        const SubIcon = sub.icon;
+                        const isSubActive = sub.exact
+                          ? pathname === sub.href
+                          : pathname.startsWith(sub.href);
+
+                        return (
+                          <Link
+                            key={sub.href}
+                            href={sub.href}
+                            className={cn(
+                              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150",
+                              isSubActive
+                                ? "bg-blue-600 text-white font-semibold shadow-xs"
+                                : "text-slate-400 hover:text-white hover:bg-white/5 dark:hover:bg-slate-800/50"
+                            )}
+                          >
+                            <SubIcon className={cn("w-4 h-4", isSubActive ? "text-white" : "text-slate-400")} />
+                            <span>{sub.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Item padrão do menu
             const isActive = item.exact
               ? pathname === item.href
               : pathname.startsWith(item.href);
