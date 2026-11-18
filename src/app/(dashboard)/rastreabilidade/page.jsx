@@ -27,10 +27,52 @@ export default function TraceabilityPage() {
     if (!activeProject?.id) return;
 
     try {
-      // 1. Buscar stakeholders membros cadastrados no projeto ativo
-      const membersRes = await getProjectMembersAction(activeProject.id);
-      let projectMembers = [];
+      // Disparar membros, requisitos e histórias de usuário em paralelo (Promise.all)
+      const [membersRes, reqList, storiesData] = await Promise.all([
+        // 1. Buscar stakeholders membros cadastrados no projeto ativo
+        getProjectMembersAction(activeProject.id),
 
+        // 2. Buscar Requisitos vinculados ao projeto ativo (via project_id direto e fallback via project_requirements)
+        (async () => {
+          let list = [];
+          try {
+            const { data: directReqs, error: directErr } = await supabase
+              .from("requirements")
+              .select("id, code, title, responsible_id")
+              .eq("project_id", activeProject.id)
+              .order("code", { ascending: true });
+
+            if (!directErr && directReqs && directReqs.length > 0) {
+              list = directReqs;
+            }
+          } catch {}
+
+          if (list.length === 0) {
+            try {
+              const { data: linkedReqs } = await supabase
+                .from("project_requirements")
+                .select("requirement:requirements(id, code, title, responsible_id)")
+                .eq("project_id", activeProject.id);
+
+              list = (linkedReqs || [])
+                .map((l) => l.requirement)
+                .filter(Boolean)
+                .sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+            } catch {}
+          }
+          return list;
+        })(),
+
+        // 3. Buscar User Stories vinculadas ao projeto ativo
+        supabase
+          .from("user_stories")
+          .select("id, code, title")
+          .eq("project_id", activeProject.id)
+          .order("code", { ascending: true })
+          .then(({ data }) => data || []),
+      ]);
+
+      let projectMembers = [];
       if (membersRes?.success && membersRes.data?.length > 0) {
         projectMembers = membersRes.data
           .map((m) => {
@@ -56,39 +98,6 @@ export default function TraceabilityPage() {
 
       setStakeholders(projectMembers);
 
-      // 2. Buscar Requisitos vinculados ao projeto ativo (via project_id direto e fallback via project_requirements)
-      let reqList = [];
-      try {
-        const { data: directReqs, error: directErr } = await supabase
-          .from("requirements")
-          .select("id, code, title, responsible_id")
-          .eq("project_id", activeProject.id)
-          .order("code", { ascending: true });
-
-        if (!directErr && directReqs && directReqs.length > 0) {
-          reqList = directReqs;
-        }
-      } catch {}
-
-      if (reqList.length === 0) {
-        const { data: linkedReqs } = await supabase
-          .from("project_requirements")
-          .select("requirement:requirements(id, code, title, responsible_id)")
-          .eq("project_id", activeProject.id);
-
-        reqList = (linkedReqs || [])
-          .map((l) => l.requirement)
-          .filter(Boolean)
-          .sort((a, b) => (a.code || "").localeCompare(b.code || ""));
-      }
-
-      // 3. Buscar User Stories vinculadas ao projeto ativo
-      const { data: storiesData } = await supabase
-        .from("user_stories")
-        .select("id, code, title")
-        .eq("project_id", activeProject.id)
-        .order("code", { ascending: true });
-
       if (reqList.length > 0) {
         setRequirements(reqList);
         setUserStories(storiesData || []);
@@ -96,23 +105,23 @@ export default function TraceabilityPage() {
         const reqIds = reqList.map((r) => r.id);
         const newLinks = {};
 
-        // Buscar vínculos reais de requirement_user_stories
-        const { data: usLinks } = await supabase
-          .from("requirement_user_stories")
-          .select("requirement_id, user_story_id")
-          .in("requirement_id", reqIds);
+        // Buscar vínculos reais de requirement_user_stories e requirement_stakeholders em paralelo
+        const [usLinksRes, stkLinksRes] = await Promise.all([
+          supabase
+            .from("requirement_user_stories")
+            .select("requirement_id, user_story_id")
+            .in("requirement_id", reqIds),
+          supabase
+            .from("requirement_stakeholders")
+            .select("requirement_id, stakeholder_id")
+            .in("requirement_id", reqIds),
+        ]);
 
-        (usLinks || []).forEach((item) => {
+        (usLinksRes?.data || []).forEach((item) => {
           newLinks[`${item.requirement_id}-${item.user_story_id}`] = true;
         });
 
-        // Buscar vínculos reais de requirement_stakeholders
-        const { data: stkLinks } = await supabase
-          .from("requirement_stakeholders")
-          .select("requirement_id, stakeholder_id")
-          .in("requirement_id", reqIds);
-
-        (stkLinks || []).forEach((item) => {
+        (stkLinksRes?.data || []).forEach((item) => {
           newLinks[`${item.requirement_id}-${item.stakeholder_id}`] = true;
         });
 

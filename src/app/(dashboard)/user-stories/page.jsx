@@ -82,55 +82,64 @@ export default function UserStoriesPage() {
     if (!activeProject?.id) return;
     setLoading(true);
     try {
-      // 1. Buscar Sprints do Projeto
-      const { data: sprintsData } = await supabase
-        .from("sprints")
-        .select("id, name, status")
-        .eq("project_id", activeProject.id)
-        .order("created_at", { ascending: true });
-
-      setSprints(sprintsData || []);
-
-      // 2. Buscar Requisitos do Projeto (via project_id direto e fallback via project_requirements)
-      let reqs = [];
-      try {
-        const { data: directReqs, error: directErr } = await supabase
-          .from("requirements")
-          .select("id, code, title, status, type")
+      // Disparar requisições de Sprints, Requisitos e User Stories em paralelo (Promise.all)
+      const [sprintsData, reqs, storiesRes] = await Promise.all([
+        // 1. Buscar Sprints do Projeto
+        supabase
+          .from("sprints")
+          .select("id, name, status")
           .eq("project_id", activeProject.id)
-          .order("code", { ascending: true });
+          .order("created_at", { ascending: true })
+          .then(({ data }) => data || []),
 
-        if (!directErr && directReqs && directReqs.length > 0) {
-          reqs = directReqs;
-        }
-      } catch {}
+        // 2. Buscar Requisitos do Projeto (via project_id direto e fallback via project_requirements)
+        (async () => {
+          let fetchedReqs = [];
+          try {
+            const { data: directReqs, error: directErr } = await supabase
+              .from("requirements")
+              .select("id, code, title, status, type")
+              .eq("project_id", activeProject.id)
+              .order("code", { ascending: true });
 
-      if (reqs.length === 0) {
-        try {
-          const { data: linkedReqs } = await supabase
-            .from("project_requirements")
-            .select("requirement:requirements(id, code, title, status, type)")
-            .eq("project_id", activeProject.id);
+            if (!directErr && directReqs && directReqs.length > 0) {
+              fetchedReqs = directReqs;
+            }
+          } catch {}
 
-          if (linkedReqs && linkedReqs.length > 0) {
-            reqs = linkedReqs
-              .map((l) => l.requirement)
-              .filter(Boolean)
-              .sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+          if (fetchedReqs.length === 0) {
+            try {
+              const { data: linkedReqs } = await supabase
+                .from("project_requirements")
+                .select("requirement:requirements(id, code, title, status, type)")
+                .eq("project_id", activeProject.id);
+
+              if (linkedReqs && linkedReqs.length > 0) {
+                fetchedReqs = linkedReqs
+                  .map((l) => l.requirement)
+                  .filter(Boolean)
+                  .sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+              }
+            } catch {}
           }
-        } catch {}
-      }
+          return fetchedReqs;
+        })(),
 
+        // 3. Buscar User Stories do Projeto
+        supabase
+          .from("user_stories")
+          .select("*")
+          .eq("project_id", activeProject.id)
+          .order("code", { ascending: true }),
+      ]);
+
+      setSprints(sprintsData);
       setProjectRequirements(reqs);
 
-      // 3. Buscar User Stories do Projeto
-      const { data: storiesData, error: storiesErr } = await supabase
-        .from("user_stories")
-        .select("*")
-        .eq("project_id", activeProject.id)
-        .order("code", { ascending: true });
+      const storiesData = storiesRes?.data || [];
+      const storiesErr = storiesRes?.error;
 
-      if (!storiesErr && storiesData && storiesData.length > 0) {
+      if (!storiesErr && storiesData.length > 0) {
         setStories(storiesData);
 
         // 4. Buscar vínculos requirement_user_stories

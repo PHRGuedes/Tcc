@@ -25,44 +25,67 @@ export default function DashboardPage() {
       if (!activeProject?.id) return;
 
       try {
-        // 1. Buscar requisitos vinculados ao projeto (tentando via project_id direto e fallback via project_requirements)
-        let reqs = [];
-        try {
-          const { data: directReqs, error: directErr } = await supabase
-            .from("requirements")
-            .select("id, status")
-            .eq("project_id", activeProject.id);
+        // Disparar requisições em paralelo (Promise.all) para evitar waterfalls
+        const [reqs, userStoriesCount, logs] = await Promise.all([
+          // 1. Buscar requisitos vinculados ao projeto (tentando via project_id direto e fallback via project_requirements)
+          (async () => {
+            let fetchedReqs = [];
+            try {
+              const { data: directReqs, error: directErr } = await supabase
+                .from("requirements")
+                .select("id, status")
+                .eq("project_id", activeProject.id);
 
-          if (!directErr && directReqs && directReqs.length > 0) {
-            reqs = directReqs;
-          }
-        } catch {}
+              if (!directErr && directReqs && directReqs.length > 0) {
+                fetchedReqs = directReqs;
+              }
+            } catch {}
 
-        if (reqs.length === 0) {
-          try {
-            const { data: linked } = await supabase
-              .from("project_requirements")
-              .select("requirement:requirements(id, status)")
-              .eq("project_id", activeProject.id);
+            if (fetchedReqs.length === 0) {
+              try {
+                const { data: linked } = await supabase
+                  .from("project_requirements")
+                  .select("requirement:requirements(id, status)")
+                  .eq("project_id", activeProject.id);
 
-            if (linked) {
-              reqs = linked.map((l) => l.requirement).filter(Boolean);
+                if (linked) {
+                  fetchedReqs = linked.map((l) => l.requirement).filter(Boolean);
+                }
+              } catch {}
             }
-          } catch {}
-        }
+            return fetchedReqs;
+          })(),
 
-        // 2. Buscar total de User Stories do projeto
-        let userStoriesCount = 0;
-        try {
-          const { count, error: usErr } = await supabase
-            .from("user_stories")
-            .select("id", { count: "exact", head: true })
-            .eq("project_id", activeProject.id);
+          // 2. Buscar contagem total de User Stories do projeto
+          (async () => {
+            try {
+              const { count, error: usErr } = await supabase
+                .from("user_stories")
+                .select("id", { count: "exact", head: true })
+                .eq("project_id", activeProject.id);
 
-          if (!usErr && typeof count === "number") {
-            userStoriesCount = count;
-          }
-        } catch {}
+              if (!usErr && typeof count === "number") {
+                return count;
+              }
+            } catch {}
+            return 0;
+          })(),
+
+          // 3. Buscar atividades recentes de auditoria do projeto ativo
+          (async () => {
+            try {
+              const { data } = await supabase
+                .from("audit_logs")
+                .select("id, action, description, created_at, profiles(full_name, avatar_url)")
+                .eq("project_id", activeProject.id)
+                .order("created_at", { ascending: false })
+                .limit(5);
+              return data || [];
+            } catch {
+              return [];
+            }
+          })(),
+        ]);
 
         if (reqs && reqs.length > 0) {
           const total = reqs.length;
@@ -108,14 +131,6 @@ export default function DashboardPage() {
             userStories: userStoriesCount,
           });
         }
-
-        // Buscar atividades recentes de auditoria do projeto ativo
-        const { data: logs } = await supabase
-          .from("audit_logs")
-          .select("id, action, description, created_at, profiles(full_name, avatar_url)")
-          .eq("project_id", activeProject.id)
-          .order("created_at", { ascending: false })
-          .limit(5);
 
         if (logs && logs.length > 0) {
           setActivities(

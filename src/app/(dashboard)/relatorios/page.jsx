@@ -24,7 +24,6 @@ import {
   REQUIREMENT_STATUS_LABELS,
   normalizeRequirementStatus,
 } from "@/lib/constants/statuses";
-import { generateProjectReportPDF } from "@/lib/utils/pdf-generator";
 
 export default function ReportsPage() {
   const { activeProject } = useProject();
@@ -38,49 +37,63 @@ export default function ReportsPage() {
     async function loadReportData() {
       if (!activeProject?.id) return;
       try {
-        // 1. Buscar requisitos do projeto (via project_id direto e fallback via project_requirements)
-        let reqList = [];
-        try {
-          const { data: directReqs, error: directErr } = await supabase
-            .from("requirements")
-            .select("*, profiles:responsible_id(full_name)")
-            .eq("project_id", activeProject.id)
-            .order("code", { ascending: true });
+        // Disparar requisições em paralelo (Promise.all)
+        const [reqList, storiesData] = await Promise.all([
+          // 1. Buscar requisitos do projeto (via project_id direto e fallback via project_requirements)
+          (async () => {
+            let list = [];
+            try {
+              const { data: directReqs, error: directErr } = await supabase
+                .from("requirements")
+                .select("*, profiles:responsible_id(full_name)")
+                .eq("project_id", activeProject.id)
+                .order("code", { ascending: true });
 
-          if (!directErr && directReqs && directReqs.length > 0) {
-            reqList = directReqs.map((r) => ({
-              ...r,
-              responsible_name: r.profiles?.full_name || "Não atribuído",
-            }));
-          }
-        } catch {}
+              if (!directErr && directReqs && directReqs.length > 0) {
+                list = directReqs.map((r) => ({
+                  ...r,
+                  responsible_name: r.profiles?.full_name || "Não atribuído",
+                }));
+              }
+            } catch {}
 
-        if (reqList.length === 0) {
-          const { data: linked } = await supabase
-            .from("project_requirements")
-            .select("requirement:requirements(*, profiles:responsible_id(full_name))")
-            .eq("project_id", activeProject.id);
+            if (list.length === 0) {
+              try {
+                const { data: linked } = await supabase
+                  .from("project_requirements")
+                  .select("requirement:requirements(*, profiles:responsible_id(full_name))")
+                  .eq("project_id", activeProject.id);
 
-          reqList = (linked || [])
-            .map((l) => l.requirement)
-            .filter(Boolean)
-            .map((r) => ({
-              ...r,
-              responsible_name: r.profiles?.full_name || "Não atribuído",
-            }))
-            .sort((a, b) => (a.code || "").localeCompare(b.code || ""));
-        }
+                list = (linked || [])
+                  .map((l) => l.requirement)
+                  .filter(Boolean)
+                  .map((r) => ({
+                    ...r,
+                    responsible_name: r.profiles?.full_name || "Não atribuído",
+                  }))
+                  .sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+              } catch {}
+            }
+            return list;
+          })(),
+
+          // 2. Buscar User Stories do projeto
+          (async () => {
+            try {
+              const { data } = await supabase
+                .from("user_stories")
+                .select("*")
+                .eq("project_id", activeProject.id)
+                .order("code", { ascending: true });
+              return data || [];
+            } catch {
+              return [];
+            }
+          })(),
+        ]);
 
         setRequirements(reqList);
-
-        // 2. Buscar User Stories do projeto
-        const { data: storiesData } = await supabase
-          .from("user_stories")
-          .select("*")
-          .eq("project_id", activeProject.id)
-          .order("code", { ascending: true });
-
-        setUserStories(storiesData || []);
+        setUserStories(storiesData);
       } catch (err) {
         console.warn("Erro ao carregar dados do relatório:", err);
       }
@@ -95,10 +108,11 @@ export default function ReportsPage() {
     window.print();
   };
 
-  // Exportar Relatório Profissional Diagramado em PDF
-  const handleDownloadPDF = () => {
+  // Exportar Relatório Profissional Diagramado em PDF (Lazy loading dinâmico do jspdf)
+  const handleDownloadPDF = async () => {
     setIsGeneratingPDF(true);
     try {
+      const { generateProjectReportPDF } = await import("@/lib/utils/pdf-generator");
       generateProjectReportPDF({
         project: activeProject,
         requirements,

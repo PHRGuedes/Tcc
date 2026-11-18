@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useProject } from "@/components/layout/project-context";
+import { usePermissions } from "@/components/layout/permissions-context";
 import { useTheme } from "@/components/layout/theme-provider";
 import { getInitials } from "@/lib/utils/formatters";
 import { ROLE_LABELS } from "@/lib/constants/roles";
@@ -35,6 +36,7 @@ import {
 export function Topbar({ title = "Dashboard" }) {
   const { profile, loading, signOut } = useAuth();
   const { activeProject, projects, setActiveProject, createProject, refreshProjects } = useProject();
+  const { role: projectRole, isOwner } = usePermissions();
   const { theme, toggleTheme } = useTheme();
 
   const [mounted, setMounted] = useState(false);
@@ -52,69 +54,44 @@ export function Topbar({ title = "Dashboard" }) {
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
-  const [projectRole, setProjectRole] = useState(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const isProjectCreator = Boolean(
-    activeProject?.created_by && profile?.id && activeProject.created_by === profile.id
+    isOwner || (activeProject?.created_by && profile?.id && activeProject.created_by === profile.id)
   );
 
   const isProjectAdmin = Boolean(
     isProjectCreator || projectRole === "admin"
   );
 
-  // Carrega a função do usuário autenticado no projeto atual
-  useEffect(() => {
-    if (!activeProject?.id || !profile?.id) return;
-
-    if (activeProject.created_by === profile.id) {
-      setProjectRole("admin");
-      return;
-    }
-
-    const supabase = createClient();
-    supabase
-      .from("project_members")
-      .select("role_in_project")
-      .eq("project_id", activeProject.id)
-      .eq("user_id", profile.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.role_in_project) {
-          setProjectRole(data.role_in_project);
-        } else {
-          setProjectRole(null);
-        }
-      });
-  }, [activeProject?.id, activeProject?.created_by, profile?.id]);
-
-  // Carrega e monitora convites pendentes e notificações recentes do projeto (RF.41)
+  // Carrega e monitora convites pendentes e notificações recentes do projeto (RF.41) em paralelo
   useEffect(() => {
     if (!profile?.id) return;
     let isMounted = true;
 
     const loadInvitesAndActivities = async () => {
       try {
-        const res = await getUserProjectInvitationsAction();
-        if (isMounted && res.success) {
+        const [res, logsRes] = await Promise.all([
+          getUserProjectInvitationsAction(),
+          activeProject?.id
+            ? createClient()
+                .from("audit_logs")
+                .select("id, action, entity_type, description, created_at, profiles(full_name)")
+                .eq("project_id", activeProject.id)
+                .order("created_at", { ascending: false })
+                .limit(8)
+            : Promise.resolve({ data: [] }),
+        ]);
+
+        if (isMounted && res?.success) {
           setNotifications(res.data || []);
         }
 
-        if (activeProject?.id) {
-          const supabase = createClient();
-          const { data: logs } = await supabase
-            .from("audit_logs")
-            .select("id, action, entity_type, description, created_at, profiles(full_name)")
-            .eq("project_id", activeProject.id)
-            .order("created_at", { ascending: false })
-            .limit(8);
-
-          if (isMounted && logs) {
-            setProjectActivities(logs);
-          }
+        if (isMounted && logsRes?.data) {
+          setProjectActivities(logsRes.data);
         }
       } catch (err) {
         console.warn("Aviso ao buscar notificações:", err);

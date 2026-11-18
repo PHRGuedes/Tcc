@@ -36,10 +36,66 @@ export default function RequirementsPage() {
     if (!activeProject?.id) return;
     setLoading(true);
     try {
-      // 1. Buscar stakeholders membros do projeto ativo
-      const membersRes = await getProjectMembersAction(activeProject.id);
-      let projectMembers = [];
+      // Disparar membros, user stories e requisitos em paralelo (Promise.all)
+      const [membersRes, usData, projectReqs] = await Promise.all([
+        // 1. Buscar stakeholders membros do projeto ativo
+        getProjectMembersAction(activeProject.id),
 
+        // 2. Buscar User Stories DO PROJETO ATIVO
+        supabase
+          .from("user_stories")
+          .select("id, code, title")
+          .eq("project_id", activeProject.id)
+          .order("code", { ascending: true })
+          .then(({ data }) => data || []),
+
+        // 3. Buscar Requisitos vinculados ao PROJETO ATIVO
+        (async () => {
+          let reqs = [];
+          try {
+            const { data: directReqs, error: directErr } = await supabase
+              .from("requirements")
+              .select("*, profiles:responsible_id(full_name)")
+              .eq("project_id", activeProject.id)
+              .order("code", { ascending: true });
+
+            if (!directErr && directReqs && directReqs.length > 0) {
+              reqs = directReqs.map((r) => ({
+                ...r,
+                responsible_name: r.profiles?.full_name || "Não atribuído",
+              }));
+            }
+          } catch {}
+
+          if (reqs.length === 0) {
+            try {
+              const { data: linkedData } = await supabase
+                .from("project_requirements")
+                .select(`
+                  requirement:requirements (
+                    *,
+                    profiles:responsible_id(full_name)
+                  )
+                `)
+                .eq("project_id", activeProject.id);
+
+              if (linkedData && linkedData.length > 0) {
+                reqs = linkedData
+                  .map((item) => item.requirement)
+                  .filter(Boolean)
+                  .map((r) => ({
+                    ...r,
+                    responsible_name: r.profiles?.full_name || "Não atribuído",
+                  }))
+                  .sort((a, b) => a.code.localeCompare(b.code));
+              }
+            } catch {}
+          }
+          return reqs;
+        })(),
+      ]);
+
+      let projectMembers = [];
       if (membersRes?.success && membersRes.data?.length > 0) {
         projectMembers = membersRes.data.map((m) => ({
           id: m.profiles?.id || m.user_id,
@@ -55,15 +111,7 @@ export default function RequirementsPage() {
           { id: "44444444-4444-4444-4444-444444444444", full_name: "Beatriz Souza" },
         ];
       }
-
       setStakeholders(projectMembers);
-
-      // 2. Buscar User Stories DO PROJETO ATIVO
-      const { data: usData } = await supabase
-        .from("user_stories")
-        .select("id, code, title")
-        .eq("project_id", activeProject.id)
-        .order("code", { ascending: true });
 
       if (usData && usData.length > 0) {
         setUserStories(usData);
@@ -77,49 +125,6 @@ export default function RequirementsPage() {
         ]);
       } else {
         setUserStories([]);
-      }
-
-      // 3. Buscar Requisitos vinculados ao PROJETO ATIVO
-      // Tenta buscar via project_id direto e fallback via project_requirements
-      let projectReqs = [];
-
-      try {
-        const { data: directReqs, error: directErr } = await supabase
-          .from("requirements")
-          .select("*, profiles:responsible_id(full_name)")
-          .eq("project_id", activeProject.id)
-          .order("code", { ascending: true });
-
-        if (!directErr && directReqs && directReqs.length > 0) {
-          projectReqs = directReqs.map((r) => ({
-            ...r,
-            responsible_name: r.profiles?.full_name || "Não atribuído",
-          }));
-        }
-      } catch {}
-
-      // Se não encontrou por project_id direto, consulta via tabela associativa project_requirements
-      if (projectReqs.length === 0) {
-        const { data: linkedData } = await supabase
-          .from("project_requirements")
-          .select(`
-            requirement:requirements (
-              *,
-              profiles:responsible_id(full_name)
-            )
-          `)
-          .eq("project_id", activeProject.id);
-
-        if (linkedData && linkedData.length > 0) {
-          projectReqs = linkedData
-            .map((item) => item.requirement)
-            .filter(Boolean)
-            .map((r) => ({
-              ...r,
-              responsible_name: r.profiles?.full_name || "Não atribuído",
-            }))
-            .sort((a, b) => a.code.localeCompare(b.code));
-        }
       }
 
       if (projectReqs.length > 0) {
