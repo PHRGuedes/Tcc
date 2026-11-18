@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import {
   Bell,
@@ -17,6 +17,8 @@ import {
   X,
   Mail,
   UserMinus,
+  Search,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useProject } from "@/components/layout/project-context";
@@ -26,12 +28,15 @@ import { getInitials } from "@/lib/utils/formatters";
 import { ROLE_LABELS } from "@/lib/constants/roles";
 import { ManageProjectModal } from "@/components/modules/projects/manage-project-modal";
 import { EditProfileModal } from "@/components/modules/profile/edit-profile-modal";
+import { CommandPalette } from "@/components/layout/command-palette";
+import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { createClient } from "@/lib/supabase/client";
 import {
   getUserProjectInvitationsAction,
   respondProjectInvitationAction,
   leaveProjectAction,
 } from "@/app/actions/projects";
+import { seedDemoDataAction } from "@/app/actions/seed";
 
 export function Topbar({ title = "Dashboard" }) {
   const { profile, loading, signOut } = useAuth();
@@ -50,6 +55,9 @@ export function Topbar({ title = "Dashboard" }) {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -57,6 +65,18 @@ export function Topbar({ title = "Dashboard" }) {
 
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Atalho global de teclado Ctrl + K / Cmd + K para abrir a Busca Rápida (Command Palette)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, []);
 
   const isProjectCreator = Boolean(
@@ -137,14 +157,29 @@ export function Topbar({ title = "Dashboard" }) {
     }
   };
 
-  // Sair voluntariamente do projeto atual
-  const handleLeaveProject = async () => {
-    if (!activeProject?.id || isProjectCreator) return;
+  // Popular projeto ativo com dados completos de demonstração (Banca de TCC)
+  const handleSeedDemo = async () => {
+    if (!activeProject?.id) return;
+    setIsSeeding(true);
+    try {
+      const res = await seedDemoDataAction(activeProject.id);
+      if (res.success) {
+        alert(res.message);
+        window.location.reload();
+      } else {
+        alert(res.error || "Não foi possível carregar os dados de demonstração.");
+      }
+    } catch (err) {
+      console.error("Erro ao popular demonstração:", err);
+      alert("Erro ao popular demonstração.");
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
-    const confirmed = window.confirm(
-      `Tem certeza que deseja sair do projeto "${activeProject.name}"? Você deixará de ser membro e perderá o acesso.`
-    );
-    if (!confirmed) return;
+  // Sair voluntariamente do projeto atual
+  const confirmLeaveProject = async () => {
+    if (!activeProject?.id || isProjectCreator) return;
 
     setIsLeavingProject(true);
     try {
@@ -154,6 +189,7 @@ export function Topbar({ title = "Dashboard" }) {
         return;
       }
       setShowProjectMenu(false);
+      setShowLeaveConfirm(false);
       await refreshProjects();
     } catch (err) {
       console.error("Erro ao sair do projeto:", err);
@@ -161,6 +197,11 @@ export function Topbar({ title = "Dashboard" }) {
     } finally {
       setIsLeavingProject(false);
     }
+  };
+
+  const handleLeaveProject = () => {
+    if (!activeProject?.id || isProjectCreator) return;
+    setShowLeaveConfirm(true);
   };
 
   const handleCreateProject = async (e) => {
@@ -237,6 +278,34 @@ export function Topbar({ title = "Dashboard" }) {
                   ))}
                 </div>
                 <div className="border-t border-slate-100 dark:border-slate-800 mt-2 pt-2 space-y-1">
+                  <button
+                    onClick={() => {
+                      setShowCommandPalette(true);
+                      setShowProjectMenu(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Search className="w-4 h-4 text-slate-400" />
+                    <span>Buscar no Projeto (Ctrl+K)</span>
+                  </button>
+                  {isProjectAdmin && (
+                    <button
+                      onClick={() => {
+                        setShowProjectMenu(false);
+                        handleSeedDemo();
+                      }}
+                      disabled={isSeeding}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                      title="Preenche o projeto com 8 requisitos, 4 histórias e Sprint 1 de demonstração"
+                    >
+                      {isSeeding ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 text-amber-500" />
+                      )}
+                      <span>Preencher Dados de Exemplo</span>
+                    </button>
+                  )}
                   {isProjectAdmin && (
                     <button
                       onClick={() => {
@@ -293,8 +362,31 @@ export function Topbar({ title = "Dashboard" }) {
         </div>
       </div>
 
-      {/* Right Controls: Theme Toggle, Notifications & User Profile */}
-      <div className="flex items-center gap-3 sm:gap-4">
+      {/* Right Controls: Search Pill, Theme Toggle, Notifications & User Profile */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Command Palette Trigger Pill */}
+        <button
+          type="button"
+          onClick={() => setShowCommandPalette(true)}
+          className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400 bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-xl transition-all cursor-pointer shadow-2xs group"
+          title="Busca rápida global (Ctrl + K)"
+        >
+          <Search className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+          <span className="font-medium">Buscar...</span>
+          <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-slate-400">
+            Ctrl K
+          </kbd>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowCommandPalette(true)}
+          className="sm:hidden p-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300"
+          title="Busca rápida (Ctrl + K)"
+        >
+          <Search className="w-4 h-4" />
+        </button>
+
         {/* Dark Mode Toggle Button */}
         <button
           onClick={toggleTheme}
@@ -641,6 +733,26 @@ export function Topbar({ title = "Dashboard" }) {
     <EditProfileModal
       isOpen={showProfileModal}
       onClose={() => setShowProfileModal(false)}
+    />
+
+    {/* Modal de Busca Global (Command Palette) */}
+    <CommandPalette
+      isOpen={showCommandPalette}
+      onClose={() => setShowCommandPalette(false)}
+      onSeedDemo={handleSeedDemo}
+    />
+
+    {/* Modal de Confirmação para Sair do Projeto */}
+    <ConfirmModal
+      isOpen={showLeaveConfirm}
+      onClose={() => setShowLeaveConfirm(false)}
+      onConfirm={confirmLeaveProject}
+      title="Sair do Projeto"
+      description={`Tem certeza que deseja sair do projeto "${activeProject?.name}"? Você deixará de ser membro e perderá o acesso aos requisitos deste projeto.`}
+      confirmLabel="Sim, Sair do Projeto"
+      cancelLabel="Cancelar"
+      variant="danger"
+      isLoading={isLeavingProject}
     />
   </>
   );
