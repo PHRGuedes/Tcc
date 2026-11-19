@@ -5,7 +5,6 @@ import { Plus, Globe, CheckCircle2, Bookmark } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { RequirementsTable } from "@/components/modules/requirements/requirements-table";
 import { RequirementModal } from "@/components/modules/requirements/requirement-modal";
-import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -24,8 +23,6 @@ export default function GlobalRequirementsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [toastMessage, setToastMessage] = useState("");
-  const [reqToDelete, setReqToDelete] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   // Carregar Requisitos Globais da biblioteca pessoal do usuário
   const loadGlobalRequirements = useCallback(async () => {
@@ -58,27 +55,16 @@ export default function GlobalRequirementsPage() {
     loadGlobalRequirements();
   }, [loadGlobalRequirements]);
 
-  // Exclusão de requisito global com Modal Customizado
-  const handleDeleteRequirement = (req) => {
-    setReqToDelete(req);
-  };
+  // Exclusão de requisito global
+  const handleDeleteRequirement = async (req) => {
+    const confirmDelete = window.confirm(
+      `Deseja realmente excluir o requisito global "${req.code}" da sua biblioteca?`
+    );
+    if (!confirmDelete) return;
 
-  const confirmDeleteRequirement = async () => {
-    if (!reqToDelete) return;
-    setIsDeleting(true);
-    try {
-      setRequirements((prev) => prev.filter((r) => r.id !== reqToDelete.id));
-      await deleteRequirementAction(reqToDelete.id);
-      setToastMessage(`Requisito global "${reqToDelete.code}" excluído com sucesso da sua biblioteca.`);
-      setTimeout(() => setToastMessage(""), 4000);
-      setReqToDelete(null);
-      loadGlobalRequirements();
-    } catch (err) {
-      console.error("Erro ao excluir requisito global:", err);
-      alert("Não foi possível excluir o requisito global.");
-    } finally {
-      setIsDeleting(false);
-    }
+    setRequirements((prev) => prev.filter((r) => r.id !== req.id));
+    await deleteRequirementAction(req.id);
+    loadGlobalRequirements();
   };
 
   return (
@@ -168,19 +154,6 @@ export default function GlobalRequirementsPage() {
           onDeleteRequirement={handleDeleteRequirement}
         />
       </div>
-
-      {/* Modal de Confirmação Customizado para Excluir Requisito Global */}
-      <ConfirmModal
-        isOpen={Boolean(reqToDelete)}
-        onClose={() => setReqToDelete(null)}
-        onConfirm={confirmDeleteRequirement}
-        title="Excluir Requisito Global"
-        description={`Deseja realmente excluir o requisito global "${reqToDelete?.code} - ${reqToDelete?.title}" da sua biblioteca? Esta ação não afetará os projetos onde este requisito já foi importado.`}
-        confirmLabel="Sim, Excluir da Biblioteca"
-        cancelLabel="Cancelar"
-        variant="danger"
-        isLoading={isDeleting}
-      />
     </>
   );
 }

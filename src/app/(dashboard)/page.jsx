@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import { Topbar } from "@/components/layout/topbar";
 import { KpiGrid } from "@/components/modules/dashboard/kpi-grid";
 import { StatusDonutChart } from "@/components/modules/dashboard/status-donut";
 import { ActivityFeed } from "@/components/modules/dashboard/activity-feed";
 import { useProject } from "@/components/layout/project-context";
 import { createClient } from "@/lib/supabase/client";
-import { seedDemoDataAction } from "@/app/actions/seed";
 
 export default function DashboardPage() {
   const { activeProject } = useProject();
@@ -20,15 +18,15 @@ export default function DashboardPage() {
     userStories: 0,
   });
   const [activities, setActivities] = useState([]);
-  const [isSeeding, setIsSeeding] = useState(false);
   const supabase = useMemo(() => createClient(), []);
 
-  const loadDashboardData = useCallback(async () => {
-    if (!activeProject?.id) return;
+  useEffect(() => {
+    async function loadDashboardData() {
+      if (!activeProject?.id) return;
 
-    try {
-      // Disparar requisições em paralelo (Promise.all) para evitar waterfalls
-      const [reqs, userStoriesCount, logs] = await Promise.all([
+      try {
+        // Disparar requisições em paralelo (Promise.all) para evitar waterfalls
+        const [reqs, userStoriesCount, logs] = await Promise.all([
           // 1. Buscar requisitos vinculados ao projeto (tentando via project_id direto e fallback via project_requirements)
           (async () => {
             let fetchedReqs = [];
@@ -153,32 +151,10 @@ export default function DashboardPage() {
       } catch (err) {
         console.warn("Dashboard fetch:", err);
       }
-    },
-    [activeProject?.id, supabase]
-  );
-
-  useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
-
-  const handleSeedDemo = async () => {
-    if (!activeProject?.id) return;
-    setIsSeeding(true);
-    try {
-      const res = await seedDemoDataAction(activeProject.id);
-      if (res.success) {
-        alert(res.message);
-        loadDashboardData();
-      } else {
-        alert(res.error || "Não foi possível carregar dados de demonstração.");
-      }
-    } catch (err) {
-      console.error("Erro ao popular demonstração:", err);
-      alert("Erro ao popular demonstração.");
-    } finally {
-      setIsSeeding(false);
     }
-  };
+
+    loadDashboardData();
+  }, [activeProject?.id, supabase]);
 
   const chartData = [
     { name: "Aprovados", value: stats.approved, color: "#10b981" },
@@ -190,45 +166,6 @@ export default function DashboardPage() {
     <>
       <Topbar title="Dashboard" />
       <div className="p-8 max-w-7xl w-full mx-auto">
-        {/* Onboarding Banner para Projeto Novo Vazio (Modo Apresentação / Seed Rápido) */}
-        {stats.total === 0 && (
-          <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-950/40 dark:via-indigo-950/30 dark:to-purple-950/20 border border-blue-200/80 dark:border-blue-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs animate-in fade-in">
-            <div className="flex items-center gap-3.5">
-              <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 shadow-sm shadow-blue-600/30">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <span>Projeto Pronto para Apresentação à Banca</span>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
-                    Seed Rápido
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                  Preencha este projeto instantaneamente com 8 requisitos (RF/RNF), 4 histórias de usuário, Sprint 1 e matriz de rastreabilidade.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={handleSeedDemo}
-              disabled={isSeeding}
-              className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-all shadow-xs shrink-0 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {isSeeding ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Preenchendo...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Preencher Dados de Demonstração</span>
-                </>
-              )}
-            </button>
-          </div>
-        )}
-
         <KpiGrid stats={stats} />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

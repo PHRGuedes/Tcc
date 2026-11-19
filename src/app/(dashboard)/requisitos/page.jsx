@@ -1,18 +1,16 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Download, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Download, CheckCircle2 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { RequirementsTable } from "@/components/modules/requirements/requirements-table";
 import { RequirementModal } from "@/components/modules/requirements/requirement-modal";
 import { ImportRequirementsModal } from "@/components/modules/requirements/import-requirements-modal";
-import { ConfirmModal } from "@/components/ui/confirm-modal";
 import { useProject } from "@/components/layout/project-context";
 import { usePermissions } from "@/components/layout/permissions-context";
 import { createClient } from "@/lib/supabase/client";
 import { getProjectMembersAction } from "@/app/actions/projects";
 import { deleteRequirementAction } from "@/app/actions/requirements";
-import { seedDemoDataAction } from "@/app/actions/seed";
 
 export default function RequirementsPage() {
   const { activeProject } = useProject();
@@ -32,9 +30,6 @@ export default function RequirementsPage() {
   const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-  const [reqToDelete, setReqToDelete] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   // Carregar dados de requisitos e relacionamentos vinculados ao activeProject
   const loadData = useCallback(async () => {
@@ -185,54 +180,22 @@ export default function RequirementsPage() {
     loadData();
   }, [loadData]);
 
-  // Exclusão de requisito com Modal Customizado
-  const handleDeleteRequirement = (req) => {
+  // Exclusão de requisito
+  const handleDeleteRequirement = async (req) => {
     guardAction(
       "requirements_delete",
-      () => {
-        setReqToDelete(req);
+      async () => {
+        const confirmDelete = window.confirm(
+          `Deseja realmente excluir o requisito "${req.code}" deste projeto?`
+        );
+        if (!confirmDelete) return;
+
+        setRequirements((prev) => prev.filter((r) => r.id !== req.id));
+        await deleteRequirementAction(req.id);
+        loadData();
       },
       "excluir requisitos deste projeto"
     );
-  };
-
-  const confirmDeleteRequirement = async () => {
-    if (!reqToDelete) return;
-    setIsDeleting(true);
-    try {
-      setRequirements((prev) => prev.filter((r) => r.id !== reqToDelete.id));
-      await deleteRequirementAction(reqToDelete.id);
-      setToastMessage(`Requisito "${reqToDelete.code}" excluído com sucesso.`);
-      setTimeout(() => setToastMessage(""), 4000);
-      setReqToDelete(null);
-      loadData();
-    } catch (err) {
-      console.error("Erro ao excluir requisito:", err);
-      alert("Não foi possível excluir o requisito.");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  // Popular projeto com dados de demonstração
-  const handleSeedDemo = async () => {
-    if (!activeProject?.id) return;
-    setIsSeeding(true);
-    try {
-      const res = await seedDemoDataAction(activeProject.id);
-      if (res.success) {
-        setToastMessage(res.message);
-        setTimeout(() => setToastMessage(""), 6000);
-        loadData();
-      } else {
-        alert(res.error || "Não foi possível popular dados de exemplo.");
-      }
-    } catch (err) {
-      console.error("Erro ao popular dados:", err);
-      alert("Erro ao popular dados.");
-    } finally {
-      setIsSeeding(false);
-    }
   };
 
   return (
@@ -310,23 +273,6 @@ export default function RequirementsPage() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Botão de Demonstração quando o projeto estiver vazio */}
-            {requirements.length === 0 && (
-              <button
-                onClick={handleSeedDemo}
-                disabled={isSeeding}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800 rounded-xl transition-all shadow-2xs cursor-pointer disabled:opacity-50"
-                title="Popular projeto com 8 requisitos, 4 histórias e Sprint 1 de demonstração"
-              >
-                {isSeeding ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                )}
-                <span>⚡ Dados de Demonstração</span>
-              </button>
-            )}
-
             {/* Botão Importar / Reutilizar (RF.33 / RF.34) */}
             <button
               onClick={() =>
@@ -405,19 +351,6 @@ export default function RequirementsPage() {
           }}
         />
       </div>
-
-      {/* Modal de Confirmação Customizado para Excluir Requisito */}
-      <ConfirmModal
-        isOpen={Boolean(reqToDelete)}
-        onClose={() => setReqToDelete(null)}
-        onConfirm={confirmDeleteRequirement}
-        title="Excluir Requisito"
-        description={`Deseja realmente excluir o requisito "${reqToDelete?.code} - ${reqToDelete?.title}" deste projeto? Esta ação é irreversível e removerá todos os vínculos.`}
-        confirmLabel="Sim, Excluir"
-        cancelLabel="Cancelar"
-        variant="danger"
-        isLoading={isDeleting}
-      />
     </>
   );
 }

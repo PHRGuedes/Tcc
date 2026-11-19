@@ -31,8 +31,6 @@ import {
 import { useProject } from "@/components/layout/project-context";
 import { useAuth } from "@/hooks/use-auth";
 import { usePermissions } from "@/components/layout/permissions-context";
-import { ConfirmModal } from "@/components/ui/confirm-modal";
-import { seedDemoDataAction } from "@/app/actions/seed";
 import {
   getProjectMembersAction,
   getProjectInvitationsAction,
@@ -105,8 +103,6 @@ export function ManageProjectModal({ isOpen, onClose }) {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("general"); // "general" | "stakeholders"
   const [isDeletingProject, setIsDeletingProject] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState(null);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -277,52 +273,26 @@ export function ManageProjectModal({ isOpen, onClose }) {
     }
   };
 
-  // Handler para popular o projeto com dados de demonstração (Banca TCC)
-  const handleSeedDemo = async () => {
+  // Handler para excluir projeto permanentemente
+  const handleDeleteProject = async () => {
     if (!activeProject?.id || !isCurrentUserAdmin) return;
-    setIsSeeding(true);
-    setGeneralError("");
-    try {
-      const res = await seedDemoDataAction(activeProject.id);
-      if (res.success) {
-        setGeneralSuccess(res.message);
-        setTimeout(() => {
-          window.location.reload();
-        }, 1500);
-      } else {
-        setGeneralError(res.error || "Não foi possível popular os dados de demonstração.");
-      }
-    } catch (err) {
-      console.error("Erro ao popular dados:", err);
-      setGeneralError("Erro ao popular dados de demonstração.");
-    } finally {
-      setIsSeeding(false);
-    }
-  };
+    const confirmed = window.confirm(
+      `ATENÇÃO: Deseja realmente excluir o projeto "${activeProject.name}"? Todos os requisitos, user stories e sprints vinculados serão removidos permanentemente.`
+    );
+    if (!confirmed) return;
 
-  // Handler para excluir projeto permanentemente com Modal Customizado
-  const handleDeleteProject = () => {
-    if (!activeProject?.id || !isCurrentUserAdmin) return;
-    setConfirmDialog({
-      title: "Excluir Projeto Permanentemente",
-      description: `ATENÇÃO: Deseja realmente excluir o projeto "${activeProject.name}"? Todos os requisitos, user stories e sprints vinculados serão removidos permanentemente. Esta ação não pode ser desfeita.`,
-      confirmLabel: "Sim, Excluir Projeto",
-      variant: "danger",
-      onConfirm: async () => {
-        setIsDeletingProject(true);
-        setGeneralError("");
-        try {
-          await deleteProject(activeProject.id);
-          setConfirmDialog(null);
-          onClose();
-        } catch (err) {
-          console.error("Erro ao excluir projeto:", err);
-          setGeneralError(err.message || "Não foi possível excluir o projeto.");
-        } finally {
-          setIsDeletingProject(false);
-        }
-      },
-    });
+    setIsDeletingProject(true);
+    setGeneralError("");
+
+    try {
+      await deleteProject(activeProject.id);
+      onClose();
+    } catch (err) {
+      console.error("Erro ao excluir projeto:", err);
+      setGeneralError(err.message || "Não foi possível excluir o projeto.");
+    } finally {
+      setIsDeletingProject(false);
+    }
   };
 
   // Handler para convidar novo stakeholder via e-mail
@@ -425,40 +395,36 @@ export function ManageProjectModal({ isOpen, onClose }) {
     }
   };
 
-  // Handler para remover stakeholder com Modal Customizado
-  const handleRemoveMember = (member) => {
+  // Handler para remover stakeholder
+  const handleRemoveMember = async (member) => {
     const memberName = member.profiles?.full_name || "este membro";
-    setConfirmDialog({
-      title: "Remover Stakeholder",
-      description: `Tem certeza que deseja remover ${memberName} deste projeto? O usuário perderá o acesso imediatamente.`,
-      confirmLabel: "Sim, Remover Membro",
-      variant: "danger",
-      onConfirm: async () => {
-        setActionInProgressId(member.id);
-        setStakeholderError("");
-        try {
-          const res = await removeProjectMemberAction({
-            memberId: member.id,
-            projectId: activeProject.id,
-          });
+    if (!window.confirm(`Tem certeza que deseja remover ${memberName} deste projeto?`)) {
+      return;
+    }
 
-          if (!res.success) {
-            setStakeholderError(res.error || "Falha ao remover stakeholder.");
-            return;
-          }
+    setActionInProgressId(member.id);
+    setStakeholderError("");
 
-          setMembers((prev) => prev.filter((m) => m.id !== member.id));
-          setStakeholderSuccess("Stakeholder removido do projeto.");
-          setConfirmDialog(null);
-          setTimeout(() => setStakeholderSuccess(""), 3000);
-        } catch (err) {
-          console.error("Erro ao remover stakeholder:", err);
-          setStakeholderError("Erro ao remover o membro do projeto.");
-        } finally {
-          setActionInProgressId(null);
-        }
-      },
-    });
+    try {
+      const res = await removeProjectMemberAction({
+        memberId: member.id,
+        projectId: activeProject.id,
+      });
+
+      if (!res.success) {
+        setStakeholderError(res.error || "Falha ao remover stakeholder.");
+        return;
+      }
+
+      setMembers((prev) => prev.filter((m) => m.id !== member.id));
+      setStakeholderSuccess("Stakeholder removido do projeto.");
+      setTimeout(() => setStakeholderSuccess(""), 3000);
+    } catch (err) {
+      console.error("Erro ao remover stakeholder:", err);
+      setStakeholderError("Erro ao remover o membro do projeto.");
+    } finally {
+      setActionInProgressId(null);
+    }
   };
 
   // Handler para alternar uma permissão na função selecionada
@@ -554,38 +520,34 @@ export function ManageProjectModal({ isOpen, onClose }) {
     }
   };
 
-  // Handler para excluir função personalizada com Modal Customizado
-  const handleDeleteRole = (role) => {
+  // Handler para excluir função personalizada
+  const handleDeleteRole = async (role) => {
     if (role.is_system || !isCurrentUserAdmin) return;
 
-    setConfirmDialog({
-      title: "Excluir Função Personalizada",
-      description: `Deseja realmente remover a função "${role.name}" deste projeto? Os membros vinculados a ela serão automaticamente transferidos para Desenvolvedor.`,
-      confirmLabel: "Sim, Excluir Função",
-      variant: "danger",
-      onConfirm: async () => {
-        try {
-          const res = await deleteCustomProjectRoleAction({
-            projectId: activeProject.id,
-            roleId: role.id,
-          });
+    const confirmed = window.confirm(
+      `Deseja realmente remover a função "${role.name}" deste projeto? Os membros vinculados a ela serão automaticamente transferidos para Desenvolvedor.`
+    );
+    if (!confirmed) return;
 
-          if (!res.success) {
-            setPermsError(res.error || "Não foi possível excluir a função.");
-            return;
-          }
+    try {
+      const res = await deleteCustomProjectRoleAction({
+        projectId: activeProject.id,
+        roleId: role.id,
+      });
 
-          const updated = projectRoles.filter((r) => r.id !== role.id);
-          setProjectRoles(updated);
-          setSelectedRoleForPerms(updated[0] || null);
-          refreshPermissions();
-          setConfirmDialog(null);
-        } catch (err) {
-          console.error("Erro ao excluir função:", err);
-          setPermsError("Erro ao excluir função.");
-        }
-      },
-    });
+      if (!res.success) {
+        setPermsError(res.error || "Não foi possível excluir a função.");
+        return;
+      }
+
+      const updated = projectRoles.filter((r) => r.id !== role.id);
+      setProjectRoles(updated);
+      setSelectedRoleForPerms(updated[0] || null);
+      refreshPermissions();
+    } catch (err) {
+      console.error("Erro ao excluir função:", err);
+      setPermsError("Erro ao excluir função.");
+    }
   };
 
   const modalContent = (
@@ -736,36 +698,6 @@ export function ManageProjectModal({ isOpen, onClose }) {
                   </div>
                 </div>
               </div>
-
-              {/* Demonstração & Testes Rápidos (Banca de TCC) */}
-              {isCurrentUserAdmin && (
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <div className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Demonstração & Testes (Banca TCC)</span>
-                      </p>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
-                        Preenche este projeto com 8 requisitos (RF/RNF), 4 histórias de usuário, Sprint 1 e matriz de rastreabilidade.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={isSeeding}
-                      onClick={handleSeedDemo}
-                      className="px-3.5 py-2 text-xs font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/60 dark:hover:bg-amber-800/80 border border-amber-300 dark:border-amber-700 rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors disabled:opacity-60 shrink-0 cursor-pointer"
-                    >
-                      {isSeeding ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                      )}
-                      <span>Preencher Dados de Exemplo</span>
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Zona de Perigo (Apenas Administrador / Criador) */}
               {isCurrentUserAdmin && (
@@ -1511,20 +1443,6 @@ export function ManageProjectModal({ isOpen, onClose }) {
             </form>
           </div>
         </div>
-      )}
-
-      {/* Modal de Confirmação Customizado */}
-      {confirmDialog && (
-        <ConfirmModal
-          isOpen={Boolean(confirmDialog)}
-          onClose={() => setConfirmDialog(null)}
-          onConfirm={confirmDialog.onConfirm}
-          title={confirmDialog.title}
-          description={confirmDialog.description}
-          confirmLabel={confirmDialog.confirmLabel}
-          variant={confirmDialog.variant}
-          isLoading={isDeletingProject}
-        />
       )}
     </div>
   );
