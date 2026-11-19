@@ -42,15 +42,8 @@ const OFFICIAL_US_TO_REQS_MAP = {
  * Utilitário profissional de geração de Documento ERS (Especificação de Requisitos de Software)
  * Estruturado conforme as normas IEEE Std 830-1998 e ISO/IEC/IEEE 29148:2018.
  *
- * Seções incluídas:
- * 1. Capa e Cabeçalho Formal do Projeto
- * 2. Resumo Executivo e Métricas de Qualidade (Cards formatados)
- * 3. Requisitos Funcionais (RF - Homologados e Em Análise)
- * 4. Requisitos Não-Funcionais (RNF - Qualidade, Desempenho e Restrições)
- * 5. Requisitos Não Aprovados / Descartados (Análise de Escopo e Motivo da Reprovação)
- * 6. Histórias de Usuário & Backlog Ágil (Scrum)
- * 7. Matriz de Rastreabilidade Bidirecional (Requisitos ↔ User Stories)
- * 8. Rodapé Formal com Numeração de Páginas e Assinatura Eletrônica
+ * Utiliza exclusivamente codificação padrão compatível com as fontes nativas do jsPDF
+ * evitando qualquer caractere corrompido ou sobreposição visual.
  */
 export function generateProjectReportPDF({
   project,
@@ -125,62 +118,61 @@ export function generateProjectReportPDF({
   });
 
   // =========================================================================
-  // 1. HEADER BANNER DA CAPA (NAVY BLUE REQFLOW - PADRÃO FORMAL ERS)
+  // 1. HEADER BANNER DA CAPA (NAVY BLUE REQFLOW - RESPIRO E ESPAÇAMENTO PERFEITO)
   // =========================================================================
   doc.setFillColor(15, 23, 42); // #0f172a
-  doc.rect(0, 0, pageWidth, 44, "F");
+  doc.rect(0, 0, pageWidth, 42, "F");
 
   // Barra de acento azul superior vibrante
   doc.setFillColor(37, 99, 235); // #2563eb
-  doc.rect(0, 0, pageWidth, 3.5, "F");
+  doc.rect(0, 0, pageWidth, 3, "F");
 
   // Tag institucional do sistema
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
   doc.setTextColor(147, 197, 253); // #93c5fd
   doc.text(
-    "REQFLOW  •  PLATAFORMA INTEGRADA DE ENGENHARIA DE REQUISITOS",
+    "REQFLOW  |  PLATAFORMA DE ENGENHARIA DE REQUISITOS",
     14,
-    11.5
+    11
   );
 
-  // Título Principal do Documento
+  // Título Principal do Documento (Tamanho calibrado para não colidir com a direita)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
+  doc.setFontSize(13);
   doc.setTextColor(255, 255, 255);
-  doc.text("Especificação de Requisitos de Software (ERS / SRS)", 14, 20.5);
+  doc.text("Especificação de Requisitos de Software", 14, 19.5);
 
-  // Subtítulo com Nome do Projeto
+  // Subtítulo com Norma e Projeto
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(226, 232, 240); // #e2e8f0
   const truncatedProjectName =
-    projectName.length > 55 ? projectName.substring(0, 52) + "..." : projectName;
-  doc.text(`Projeto: ${truncatedProjectName}`, 14, 27.5);
+    projectName.length > 40 ? projectName.substring(0, 37) + "..." : projectName;
+  doc.text(`Documento ERS / SRS  |  Projeto: ${truncatedProjectName}`, 14, 26.5);
 
-  // Metadados à direita (Padrão internacional e emissão)
+  // Linha de padrão normativo
   doc.setFontSize(7);
+  doc.setTextColor(148, 163, 184); // #94a3b8
+  doc.text("Norma: IEEE Std 830-1998 / ISO/IEC/IEEE 29148", 14, 32.5);
+
+  // Metadados à direita (Espaço isolado e com respiro lateral garantido)
+  doc.setFontSize(6.8);
   doc.setTextColor(203, 213, 225);
-  doc.text(`Data de Emissão: ${currentDate} às ${currentTime}`, pageWidth - 14, 18, {
+  doc.text(`Emissão: ${currentDate} ${currentTime}`, pageWidth - 14, 18, {
+    align: "right",
+  });
+  doc.text("Status: Versão Homologada (Baseline)", pageWidth - 14, 24, {
     align: "right",
   });
   doc.text(
-    "Padrão: IEEE Std 830-1998 / ISO/IEC/IEEE 29148:2018",
+    `ID: ${project?.id ? project.id.slice(0, 8) + "..." : "UUID"}`,
     pageWidth - 14,
-    23,
-    { align: "right" }
-  );
-  doc.text("Status: Versão Homologada (Baseline)", pageWidth - 14, 28, {
-    align: "right",
-  });
-  doc.text(
-    `ID Projeto: ${project?.id ? project.id.slice(0, 8) + "..." : "UUID"}`,
-    pageWidth - 14,
-    33,
+    30,
     { align: "right" }
   );
 
-  let currentY = 50;
+  let currentY = 48;
 
   // =========================================================================
   // 2. RESUMO EXECUTIVO E KPIS (CARDS FORMATADOS)
@@ -208,7 +200,7 @@ export function generateProjectReportPDF({
   const storiesCount = userStories.length;
 
   // 4 Caixas de Indicadores (Largura total = 182mm)
-  const cardWidth = (pageWidth - 28 - 9) / 4; // 4 cards de 43.25mm com espaçamento de 3mm
+  const cardWidth = (pageWidth - 28 - 9) / 4; // 4 cards com espaçamento de 3mm
   const cardHeight = 16.5;
   const cardY = currentY;
 
@@ -216,7 +208,7 @@ export function generateProjectReportPDF({
     {
       label: "TOTAL DE REQUISITOS",
       value: `${totalReqs}`,
-      sub: `${rfCount} Funcionais  •  ${rnfCount} Não-Func.`,
+      sub: `${rfCount} Funcionais | ${rnfCount} Nao-Func.`,
       bg: [248, 250, 252],
       border: [203, 213, 225],
       valColor: [15, 23, 42],
@@ -233,7 +225,7 @@ export function generateProjectReportPDF({
       valColor: [22, 101, 52],
     },
     {
-      label: "EM ANÁLISE / PENDENTES",
+      label: "EM ANALISE / PENDENTES",
       value: `${reviewReqs}`,
       sub:
         totalReqs > 0
@@ -244,12 +236,12 @@ export function generateProjectReportPDF({
       valColor: [30, 64, 175],
     },
     {
-      label: "NÃO APROVADOS (DESCARTE)",
+      label: "NAO APROVADOS (DESCARTE)",
       value: `${notApprovedReqs}`,
       sub:
         notApprovedReqs > 0
-          ? "Decisões de escopo registradas"
-          : "Sem reprovações",
+          ? "Decisoes de escopo registradas"
+          : "Sem reprovacoes",
       bg: notApprovedReqs > 0 ? [254, 242, 242] : [248, 250, 252],
       border: notApprovedReqs > 0 ? [254, 202, 202] : [226, 232, 240],
       valColor: notApprovedReqs > 0 ? [185, 28, 28] : [71, 85, 105],
@@ -289,7 +281,7 @@ export function generateProjectReportPDF({
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   doc.setTextColor(30, 58, 138);
-  doc.text("1.1 Propósito e Escopo do Sistema:", 17, currentY + 4.2);
+  doc.text("1.1 Proposito e Escopo do Sistema:", 17, currentY + 4.2);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
@@ -302,7 +294,6 @@ export function generateProjectReportPDF({
   // =========================================================================
   // 3. TABELA DE REQUISITOS FUNCIONAIS (RF - ATIVOS / HOMOLOGADOS)
   // =========================================================================
-  // Filtramos os RF ativos (homologados ou em análise). Requisitos rejeitados ganham a Seção 4!
   const rfActiveList = requirements.filter(
     (r) =>
       r.type === "RF" &&
@@ -313,7 +304,7 @@ export function generateProjectReportPDF({
   doc.setFontSize(9.5);
   doc.setTextColor(15, 23, 42);
   doc.text(
-    `2. Requisitos Funcionais (RF — ${rfActiveList.length} itens ativos)`,
+    `2. Requisitos Funcionais (RF - ${rfActiveList.length} itens ativos)`,
     14,
     currentY
   );
@@ -322,18 +313,18 @@ export function generateProjectReportPDF({
   const rfRows = rfActiveList.map((rf) => {
     const normStatus = normalizeRequirementStatus(rf.status);
     const statusLabel = REQUIREMENT_STATUS_LABELS[normStatus] || normStatus;
-    const priorityLabel = PRIORITY_LABELS[rf.priority] || rf.priority || "Média";
+    const priorityLabel = PRIORITY_LABELS[rf.priority] || rf.priority || "Media";
     const versionLabel = `v${rf.current_version || 1}`;
     const responsible = rf.responsible_name || "Pedro Guedes";
 
     // Vínculo com User Stories
     const linkedStories = Array.from(reqToStoriesMap[rf.code] || []);
     const linkedStoriesLabel =
-      linkedStories.length > 0 ? linkedStories.join(", ") : "—";
+      linkedStories.length > 0 ? linkedStories.join(", ") : "-";
 
     return [
       rf.code || "RF-00",
-      `${rf.title || "Sem título"}\n${rf.description || ""}`,
+      `${rf.title || "Sem titulo"}\n${rf.description || ""}`,
       priorityLabel,
       statusLabel,
       responsible,
@@ -347,20 +338,20 @@ export function generateProjectReportPDF({
     startY: currentY,
     head: [
       [
-        "Código",
-        "Título & Descrição do Requisito",
+        "Codigo",
+        "Titulo & Descricao do Requisito",
         "Prior.",
         "Status",
-        "Responsável",
-        "Critérios de Aceitação / Regra de Negócio",
-        "História (US)",
+        "Responsavel",
+        "Criterios de Aceitacao / Regra de Negocio",
+        "Historia (US)",
         "Ver.",
       ],
     ],
     body:
       rfRows.length > 0
         ? rfRows
-        : [["—", "Nenhum requisito funcional cadastrado.", "—", "—", "—", "—", "—", "—"]],
+        : [["-", "Nenhum requisito funcional cadastrado.", "-", "-", "-", "-", "-", "-"]],
     theme: "striped",
     styles: {
       font: "helvetica",
@@ -392,19 +383,17 @@ export function generateProjectReportPDF({
       7: { cellWidth: 7, halign: "center" },
     },
     didParseCell: (data) => {
-      // Estilização semântica da coluna de Status
       if (data.section === "body" && data.column.index === 3) {
         const text = String(data.cell.raw);
         if (text.includes("Aprovado")) {
           data.cell.styles.textColor = [22, 101, 52];
-        } else if (text.includes("Em Análise")) {
+        } else if (text.includes("Analise") || text.includes("Análise")) {
           data.cell.styles.textColor = [30, 64, 175];
         }
       }
-      // Prioridade Crítica / Alta em destaque
       if (data.section === "body" && data.column.index === 2) {
         const text = String(data.cell.raw);
-        if (text.includes("Crítica") || text.includes("Alta")) {
+        if (text.includes("Critica") || text.includes("Crítica") || text.includes("Alta")) {
           data.cell.styles.textColor = [185, 28, 28];
           data.cell.styles.fontStyle = "bold";
         }
@@ -432,7 +421,7 @@ export function generateProjectReportPDF({
   doc.setFontSize(9.5);
   doc.setTextColor(15, 23, 42);
   doc.text(
-    `3. Requisitos Não-Funcionais (RNF — ${rnfActiveList.length} itens de qualidade e restrições)`,
+    `3. Requisitos Nao-Funcionais (RNF - ${rnfActiveList.length} itens de qualidade e restricoes)`,
     14,
     currentY
   );
@@ -446,10 +435,10 @@ export function generateProjectReportPDF({
 
     return [
       rnf.code || "RNF-00",
-      `${rnf.title || "Sem título"}\n${rnf.description || ""}`,
+      `${rnf.title || "Sem titulo"}\n${rnf.description || ""}`,
       priorityLabel,
       statusLabel,
-      rnf.acceptance_criteria || rnf.source || "Métrica estabelecida em norma/SLAs.",
+      rnf.acceptance_criteria || rnf.source || "Metrica estabelecida em norma/SLAs.",
       versionLabel,
     ];
   });
@@ -458,18 +447,18 @@ export function generateProjectReportPDF({
     startY: currentY,
     head: [
       [
-        "Código",
-        "Título & Especificação Técnica do RNF",
+        "Codigo",
+        "Titulo & Especificacao Tecnica do RNF",
         "Prior.",
         "Status",
-        "Critérios de Verificação / Métricas / Fonte",
+        "Criterios de Verificacao / Metricas / Fonte",
         "Ver.",
       ],
     ],
     body:
       rnfRows.length > 0
         ? rnfRows
-        : [["—", "Nenhum requisito não-funcional cadastrado.", "—", "—", "—", "—"]],
+        : [["-", "Nenhum requisito nao-funcional cadastrado.", "-", "-", "-", "-"]],
     theme: "striped",
     styles: {
       font: "helvetica",
@@ -503,7 +492,7 @@ export function generateProjectReportPDF({
         const text = String(data.cell.raw);
         if (text.includes("Aprovado")) {
           data.cell.styles.textColor = [22, 101, 52];
-        } else if (text.includes("Em Análise")) {
+        } else if (text.includes("Analise") || text.includes("Análise")) {
           data.cell.styles.textColor = [30, 64, 175];
         }
       }
@@ -514,7 +503,6 @@ export function generateProjectReportPDF({
 
   // =========================================================================
   // 5. SEÇÃO DE REQUISITOS NÃO APROVADOS / DESCARTADOS (ANÁLISE DE ESCOPO)
-  // DESTAQUE DA OPÇÃO B SOLICITADA PELO USUÁRIO!
   // =========================================================================
   const notApprovedList = requirements.filter(
     (r) => normalizeRequirementStatus(r.status) === "not_approved"
@@ -529,7 +517,7 @@ export function generateProjectReportPDF({
   doc.setFontSize(9.5);
   doc.setTextColor(159, 18, 57); // #9f1239 (Rose Escuro)
   doc.text(
-    `4. Requisitos Não Aprovados / Descartados — Análise de Mudança de Escopo (${notApprovedList.length} itens)`,
+    `4. Requisitos Nao Aprovados / Descartados - Analise de Mudanca de Escopo (${notApprovedList.length} itens)`,
     14,
     currentY
   );
@@ -541,7 +529,7 @@ export function generateProjectReportPDF({
   doc.setFontSize(6.8);
   doc.setTextColor(100, 116, 139);
   doc.text(
-    "Nota de Governança: Esta seção documenta os requisitos que foram retirados ou reprovados pela equipe de engenharia e stakeholders. O registro do motivo formal é obrigatório para assegurar a rastreabilidade histórica e a justificativa técnica de alterações de escopo ao longo do ciclo de vida do projeto (ISO/IEC/IEEE 29148).",
+    "Nota de Governanca: Esta secao documenta os requisitos que foram retirados ou reprovados pela equipe de engenharia e stakeholders. O registro do motivo formal e obrigatorio para assegurar a rastreabilidade historica e a justificativa tecnica de alteracoes de escopo ao longo do ciclo de vida do projeto (ISO/IEC/IEEE 29148).",
     14,
     currentY,
     { maxWidth: pageWidth - 28 }
@@ -554,13 +542,13 @@ export function generateProjectReportPDF({
       const motive =
         nr.rejection_reason?.trim() ||
         nr.justification?.trim() ||
-        "Não aprovado durante o refinamento técnico de requisitos.";
+        "Nao aprovado durante o refinamento tecnico de requisitos.";
 
       return [
         nr.code || "REQ-00",
         nr.type || "RF",
-        `${nr.title || "Sem título"}\n${nr.description || ""}`,
-        PRIORITY_LABELS[nr.priority] || nr.priority || "Média",
+        `${nr.title || "Sem titulo"}\n${nr.description || ""}`,
+        PRIORITY_LABELS[nr.priority] || nr.priority || "Media",
         motive,
         `${nr.responsible_name || "Pedro Guedes"}\n(v${nr.current_version || 1})`,
       ];
@@ -570,12 +558,12 @@ export function generateProjectReportPDF({
       startY: currentY,
       head: [
         [
-          "Código",
+          "Codigo",
           "Tipo",
-          "Título & Descrição Original",
+          "Titulo & Descricao Original",
           "Prior.",
-          "Motivo da Não Aprovação / Justificativa Técnica da Mudança",
-          "Responsável / Ver.",
+          "Motivo da Nao Aprovacao / Justificativa Tecnica da Mudanca",
+          "Responsavel / Ver.",
         ],
       ],
       body: notApprovedRows,
@@ -597,7 +585,7 @@ export function generateProjectReportPDF({
         halign: "left",
       },
       alternateRowStyles: {
-        fillColor: [255, 241, 242], // #fff1f2 (Fundo levemente avermelhado)
+        fillColor: [255, 241, 242],
       },
       columnStyles: {
         0: { cellWidth: 15, fontStyle: "bold", textColor: [190, 18, 60] },
@@ -624,7 +612,7 @@ export function generateProjectReportPDF({
     doc.setFontSize(7.2);
     doc.setTextColor(22, 101, 52);
     doc.text(
-      "✓ Nenhum requisito foi reprovado ou descartado neste projeto até o momento. Todos os itens catalogados encontram-se aprovados ou em análise.",
+      "Nenhum requisito foi reprovado ou descartado neste projeto ate o momento. Todos os itens catalogados encontram-se aprovados ou em analise.",
       18,
       currentY + 5.5
     );
@@ -633,7 +621,7 @@ export function generateProjectReportPDF({
   }
 
   // =========================================================================
-  // 6. TABELA DE HISTÓRIAS DE USUÁRIO (USER STORIES — ÁGIL / SCRUM)
+  // 6. TABELA DE HISTORIAS DE USUARIO (USER STORIES - AGIL / SCRUM)
   // =========================================================================
   if (userStories.length > 0) {
     if (currentY > pageHeight - 45) {
@@ -645,14 +633,14 @@ export function generateProjectReportPDF({
     doc.setFontSize(9.5);
     doc.setTextColor(15, 23, 42);
     doc.text(
-      `5. Histórias de Usuário & Backlog Ágil (Scrum — ${userStories.length} histórias catalogadas)`,
+      `5. Historias de Usuario & Backlog Agil (Scrum - ${userStories.length} historias catalogadas)`,
       14,
       currentY
     );
     currentY += 3.5;
 
     const usRows = userStories.map((us) => {
-      const narrative = `Como ${us.as_a || "usuário"}, quero ${
+      const narrative = `Como ${us.as_a || "usuario"}, quero ${
         us.i_want || "..."
       }, para ${us.so_that || "..."}.`;
       const priorityLabel = PRIORITY_LABELS[us.priority] || us.priority || "Alta";
@@ -660,17 +648,17 @@ export function generateProjectReportPDF({
         backlog: "Product Backlog",
         todo: "A Fazer",
         in_progress: "Em Progresso",
-        done: "Concluído",
+        done: "Concluido",
       };
       const statusLabel = statusMap[us.status] || us.status;
 
       // Requisitos associados à história
       const linkedReqs = Array.from(storyToReqsMap[us.code] || []);
-      const linkedReqsLabel = linkedReqs.length > 0 ? linkedReqs.join(", ") : "—";
+      const linkedReqsLabel = linkedReqs.length > 0 ? linkedReqs.join(", ") : "-";
 
       return [
         us.code || "US-00",
-        us.title || "Sem título",
+        us.title || "Sem titulo",
         narrative,
         priorityLabel,
         statusLabel,
@@ -682,9 +670,9 @@ export function generateProjectReportPDF({
       startY: currentY,
       head: [
         [
-          "Código",
-          "Título da História",
-          "Narrativa Ágil (Como / Quero / Para)",
+          "Codigo",
+          "Titulo da Historia",
+          "Narrativa Agil (Como / Quero / Para)",
           "Prior.",
           "Status",
           "Requisitos (RF)",
@@ -724,8 +712,7 @@ export function generateProjectReportPDF({
   }
 
   // =========================================================================
-  // 7. MATRIZ DE RASTREABILIDADE BIDIRECIONAL (REQUISITOS ↔ USER STORIES)
-  // DESTAQUE DA OPÇÃO B SOLICITADA PELO USUÁRIO!
+  // 7. MATRIZ DE RASTREABILIDADE BIDIRECIONAL (REQUISITOS E USER STORIES)
   // =========================================================================
   if (currentY > pageHeight - 45) {
     doc.addPage();
@@ -735,7 +722,8 @@ export function generateProjectReportPDF({
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9.5);
   doc.setTextColor(15, 23, 42);
-  doc.text("6. Matriz de Rastreabilidade Bidirecional (Requisitos Funcionais ↔ User Stories)", 14, currentY);
+  // Substituicao de seta por 'e' para evitar qualquer problema de caractere corrompido
+  doc.text("6. Matriz de Rastreabilidade Bidirecional (Requisitos Funcionais e User Stories)", 14, currentY);
   currentY += 3.5;
 
   // Gerar linhas da matriz para cada Requisito Funcional
@@ -748,7 +736,7 @@ export function generateProjectReportPDF({
           const st = userStories.find((s) => s.code === sCode);
           return st ? `${sCode} (${st.title})` : sCode;
         })
-        .join("\n• ");
+        .join("\n- ");
 
       const normStatus = normalizeRequirementStatus(rf.status);
       const isRejected = normStatus === "not_approved";
@@ -762,8 +750,8 @@ export function generateProjectReportPDF({
       }
 
       return [
-        `[${rf.code}] ${rf.title || "Sem título"}`,
-        storiesDetailed ? `• ${storiesDetailed}` : "Nenhuma história vinculada",
+        `[${rf.code}] ${rf.title || "Sem titulo"}`,
+        storiesDetailed ? `- ${storiesDetailed}` : "Nenhuma historia vinculada",
         REQUIREMENT_STATUS_LABELS[normStatus] || normStatus,
         coverageLabel,
       ];
@@ -774,7 +762,7 @@ export function generateProjectReportPDF({
     head: [
       [
         "Requisito Funcional (RF)",
-        "História(s) de Usuário Associada(s)",
+        "Historia(s) de Usuario Associada(s)",
         "Status do Requisito",
         "Cobertura de Rastreabilidade",
       ],
@@ -782,7 +770,7 @@ export function generateProjectReportPDF({
     body:
       matrixRows.length > 0
         ? matrixRows
-        : [["—", "Nenhum mapeamento de rastreabilidade disponível.", "—", "—"]],
+        : [["-", "Nenhum mapeamento de rastreabilidade disponivel.", "-", "-"]],
     theme: "striped",
     styles: {
       font: "helvetica",
@@ -840,13 +828,13 @@ export function generateProjectReportPDF({
     doc.setFontSize(6.8);
     doc.setTextColor(148, 163, 184); // #94a3b8
     doc.text(
-      "ReqFlow  •  Plataforma de Apoio à Engenharia de Requisitos (TCC Pedro Henrique Guedes — IEEE 830)",
+      "ReqFlow | Plataforma de Apoio a Engenharia de Requisitos (TCC Pedro Henrique Guedes - IEEE 830)",
       14,
       pageHeight - 6.5
     );
 
     doc.text(
-      `Página ${i} de ${totalPages}`,
+      `Pagina ${i} de ${totalPages}`,
       pageWidth - 14,
       pageHeight - 6.5,
       { align: "right" }
