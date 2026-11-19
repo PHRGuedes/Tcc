@@ -34,15 +34,26 @@ export function RequirementsTable({
     guardAction(
       "requirements_approve",
       async () => {
+        let rejectionReason = null;
+        if (newStatus === "not_approved") {
+          const input = window.prompt(
+            `Informe o Motivo da Não Aprovação do requisito "${req.code}":\n\n(Ex: Rejeitado por sobrecarga documental e duplicidade de esforço. Substituído por User Stories...)`,
+            req.rejection_reason || ""
+          );
+          if (input === null) return; // Usuário cancelou
+          rejectionReason = input.trim();
+        }
+
         setActionInProgressId(req.id);
         try {
           const res = await updateRequirementStatusAction({
             id: req.id,
             status: newStatus,
+            rejectionReason,
           });
           if (res.success) {
             if (typeof onStatusChange === "function") {
-              onStatusChange(req.id, newStatus);
+              onStatusChange(req.id, newStatus, rejectionReason);
             }
           } else {
             alert(res.error || "Não foi possível atualizar o status.");
@@ -247,8 +258,16 @@ export function RequirementsTable({
                     {/* Status & Decisão Direta (se projeto) */}
                     {scope === "project" && (
                       <td className="py-4 px-6">
-                        <div className="flex flex-col gap-2 items-start">
+                        <div className="flex flex-col gap-1.5 items-start">
                           <StatusBadge status={req.status || "under_review"} />
+                          {req.status === "not_approved" && (req.rejection_reason || req.rejectionReason) && (
+                            <div
+                              title={`Motivo da Não Aprovação: ${req.rejection_reason || req.rejectionReason}`}
+                              className="text-[10px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 px-2 py-0.5 rounded-md font-medium max-w-[210px] truncate"
+                            >
+                              Motivo: {req.rejection_reason || req.rejectionReason}
+                            </div>
+                          )}
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {/* Botão Aprovar Requisito */}
                             {req.status !== "approved" && (

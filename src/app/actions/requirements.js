@@ -110,6 +110,7 @@ export async function createRequirementAction(payload) {
       acceptanceCriteria = "",
       responsibleId = null,
       userStoryId = null,
+      rejectionReason = null,
     } = payload;
 
     const normalizedCode = code?.trim().toUpperCase();
@@ -210,17 +211,27 @@ export async function createRequirementAction(payload) {
       created_by: user.id,
       user_id: user.id,
       project_id: scope === "global" ? null : projectId,
+      rejection_reason: rejectionReason?.trim() || null,
     };
 
     // 2. Tentar inserção direta com project_id
     let newReq = null;
     let insertError = null;
 
-    const insertRes = await supabase
+    let insertRes = await supabase
       .from("requirements")
       .insert(reqData)
       .select()
       .single();
+
+    if (insertRes.error && (insertRes.error.message?.includes("rejection_reason") || isMissingColumnError(insertRes.error))) {
+      delete reqData.rejection_reason;
+      insertRes = await supabase
+        .from("requirements")
+        .insert(reqData)
+        .select()
+        .single();
+    }
 
     if (insertRes.error) {
       // Se a coluna project_id ainda não existe no schema cache do Supabase (migração 0007 ainda não executada),
@@ -363,6 +374,7 @@ export async function updateRequirementAction(id, payload) {
       responsibleId,
       userStoryId,
       versionComment,
+      rejectionReason,
     } = payload;
 
     const normalizedCode = code?.trim().toUpperCase();
@@ -382,14 +394,31 @@ export async function updateRequirementAction(id, payload) {
     if (scope === "project") {
       if (status !== undefined) updateData.status = status;
       if (responsibleId !== undefined) updateData.responsible_id = responsibleId || null;
+      if (rejectionReason !== undefined) {
+        updateData.rejection_reason = rejectionReason?.trim() || null;
+      }
     }
 
-    const { data: updatedReq, error: updateError } = await supabase
+    let { data: updatedReq, error: updateError } = await supabase
       .from("requirements")
       .update(updateData)
       .eq("id", id)
       .select()
       .single();
+
+    if (updateError && (updateError.message?.includes("rejection_reason") || isMissingColumnError(updateError))) {
+      delete updateData.rejection_reason;
+      const retryUpdate = await supabase
+        .from("requirements")
+        .update(updateData)
+        .eq("id", id)
+        .select()
+        .single();
+      if (!retryUpdate.error) {
+        updatedReq = retryUpdate.data;
+        updateError = null;
+      }
+    }
 
     if (updateError) {
       if (updateError.code === "23505") {
@@ -736,7 +765,7 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
  * Server Action para aprovação rápida ou alteração direta de status do requisito.
  * Suporta os 3 status simplificados: 'under_review' (Em Análise), 'approved' (Aprovado), 'not_approved' (Não Aprovado).
  */
-export async function updateRequirementStatusAction({ id, status, projectId }) {
+export async function updateRequirementStatusAction({ id, status, projectId, rejectionReason }) {
   try {
     const supabase = await createClient();
     const {
@@ -757,32 +786,55 @@ export async function updateRequirementStatusAction({ id, status, projectId }) {
       return { success: false, error: "Status do requisito inválido." };
     }
 
-    // 1. Obter dados do requisito
+    // 1. Obter dados completos do requisito
     let targetProjId = projectId;
     let reqCode = "REQ";
+    let currentReq = null;
 
     try {
       const { data: req } = await supabase
         .from("requirements")
-        .select("id, code, title")
+        .select("*")
         .eq("id", id)
         .maybeSingle();
 
       if (req) {
         reqCode = req.code;
+        targetProjId = targetProjId || req.project_id;
+        currentReq = req;
       }
     } catch {}
 
-    // 2. Atualizar status no banco
+    // 2. Atualizar status e motivo no banco
+    const updatePayload = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+    if (rejectionReason !== undefined) {
+      updatePayload.rejection_reason = rejectionReason?.trim() || null;
+    }
+
     let { data: updated, error: updateErr } = await supabase
       .from("requirements")
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", id)
       .select()
-      .single();
+      .maybeSingle();
+
+    // Se falhar porque a coluna rejection_reason ainda não foi aplicada no schema do Supabase
+    if (updateErr && (updateErr.message?.includes("rejection_reason") || isMissingColumnError(updateErr))) {
+      delete updatePayload.rejection_reason;
+      const retryWithoutCol = await supabase
+        .from("requirements")
+        .update(updatePayload)
+        .eq("id", id)
+        .select()
+        .maybeSingle();
+      if (!retryWithoutCol.error) {
+        updated = retryWithoutCol.data;
+        updateErr = null;
+      }
+    }
 
     // Fallback se constraint antiga não aceitar 'not_approved'
     if (
@@ -798,7 +850,7 @@ export async function updateRequirementStatusAction({ id, status, projectId }) {
         })
         .eq("id", id)
         .select()
-        .single();
+        .maybeSingle();
 
       if (!retryRes.error) {
         updated = { ...retryRes.data, status: "not_approved" };
@@ -810,14 +862,46 @@ export async function updateRequirementStatusAction({ id, status, projectId }) {
       return { success: false, error: updateErr.message };
     }
 
-    // 3. Registrar na auditoria
+    // 3. Registrar nova versão no histórico (RF.22 / RF.23)
+    if (currentReq) {
+      try {
+        const nextVersion = (currentReq.current_version || 1) + 1;
+        const changeSummary =
+          status === "not_approved"
+            ? `Requisito Não Aprovado.${rejectionReason ? ` Motivo: ${rejectionReason}` : ""}`
+            : status === "approved"
+            ? "Requisito aprovado formalmente."
+            : "Requisito reaberto para análise.";
+
+        await supabase.from("requirement_versions").insert({
+          requirement_id: id,
+          version_number: nextVersion,
+          changed_by: user.id,
+          change_summary: changeSummary,
+          snapshot: {
+            ...currentReq,
+            status,
+            rejection_reason: rejectionReason || currentReq.rejection_reason,
+          },
+        });
+
+        await supabase
+          .from("requirements")
+          .update({ current_version: nextVersion })
+          .eq("id", id);
+      } catch (verErr) {
+        console.warn("Aviso ao registrar versão de status:", verErr);
+      }
+    }
+
+    // 4. Registrar na auditoria
     if (targetProjId) {
       const statusActionText =
         status === "approved"
-          ? "aprovou o requisito"
+          ? `aprovou o requisito ${reqCode}`
           : status === "not_approved"
-          ? "reprovou (marcou como Não Aprovado) o requisito"
-          : "colocou o requisito em análise";
+          ? `marcou o requisito ${reqCode} como Não Aprovado${rejectionReason ? ` (Motivo: "${rejectionReason}")` : ""}`
+          : `colocou o requisito ${reqCode} em análise`;
 
       try {
         await supabase.from("audit_logs").insert({
@@ -825,8 +909,9 @@ export async function updateRequirementStatusAction({ id, status, projectId }) {
           user_id: user.id,
           entity_type: "requirement",
           entity_id: id,
-          action: "updated",
-          description: `${statusActionText} ${reqCode}`,
+          action: status === "not_approved" ? "decision_rejected" : "updated",
+          description: statusActionText,
+          details: { status, rejectionReason },
         });
       } catch (auditErr) {
         console.warn("Aviso ao registrar auditoria de status:", auditErr);
@@ -835,7 +920,12 @@ export async function updateRequirementStatusAction({ id, status, projectId }) {
 
     revalidatePath("/", "layout");
     revalidatePath("/requisitos");
-    return { success: true, data: updated };
+    revalidatePath("/rastreabilidade");
+    revalidatePath("/relatorios");
+    return {
+      success: true,
+      data: updated || { id, status, rejection_reason: rejectionReason },
+    };
   } catch (err) {
     console.error("Exceção em updateRequirementStatusAction:", err);
     return { success: false, error: "Erro interno ao atualizar status do requisito." };

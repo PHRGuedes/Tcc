@@ -86,6 +86,7 @@ export function RequirementModal({
     justification: "",
     priority: PRIORITIES.MEDIUM,
     status: REQUIREMENT_STATUSES.UNDER_REVIEW,
+    rejection_reason: "",
     source: "",
     acceptance_criteria: "",
     user_story_id: "",
@@ -139,6 +140,7 @@ export function RequirementModal({
         justification: requirement.justification || "",
         priority: requirement.priority || PRIORITIES.MEDIUM,
         status: normalizeRequirementStatus(requirement.status),
+        rejection_reason: requirement.rejection_reason || "",
         source: requirement.source || "",
         acceptance_criteria: requirement.acceptance_criteria || "",
         user_story_id: requirement.user_story_id || "",
@@ -233,6 +235,7 @@ export function RequirementModal({
         justification: "",
         priority: PRIORITIES.MEDIUM,
         status: REQUIREMENT_STATUSES.UNDER_REVIEW,
+        rejection_reason: "",
         source: scope === "global" ? "Biblioteca Pessoal" : "",
         acceptance_criteria: "",
         user_story_id: userStories[0]?.id || "",
@@ -434,8 +437,11 @@ export function RequirementModal({
           acceptanceCriteria: formData.acceptance_criteria,
           responsibleId: formData.responsible_id,
           userStoryId: formData.user_story_id,
+          rejectionReason: formData.rejection_reason,
           versionComment: sendToApproval
             ? "Requisito enviado para aprovação."
+            : finalStatus === "not_approved"
+            ? `Requisito Não Aprovado.${formData.rejection_reason ? ` Motivo: ${formData.rejection_reason}` : ""}`
             : "Atualização dos dados do requisito.",
         });
       } else {
@@ -453,6 +459,7 @@ export function RequirementModal({
           acceptanceCriteria: formData.acceptance_criteria,
           responsibleId: formData.responsible_id,
           userStoryId: formData.user_story_id,
+          rejectionReason: formData.rejection_reason,
         });
       }
 
@@ -717,6 +724,33 @@ export function RequirementModal({
                 </div>
               )}
             </div>
+
+            {/* Campo Condicional: Motivo da Não Aprovação (RF.14 / Decisão de Homologação) */}
+            {scope === "project" && formData.status === "not_approved" && (
+              <div className="p-4 rounded-2xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 space-y-2 animate-in fade-in duration-200 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-rose-700 dark:text-rose-400 uppercase tracking-wider">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                    <span>Motivo da Não Aprovação / Justificativa da Decisão</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/60 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded-full">
+                    Não Aprovado
+                  </span>
+                </div>
+                <textarea
+                  rows={2}
+                  placeholder="Descreva o motivo pelo qual este requisito não foi aprovado (ex: Rejeitado por sobrecarga documental, corte de escopo, inviabilidade técnica)..."
+                  value={formData.rejection_reason || ""}
+                  onChange={(e) =>
+                    setFormData({ ...formData, rejection_reason: e.target.value })
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-rose-300 dark:border-rose-800/80 bg-white dark:bg-slate-950 text-sm text-slate-800 dark:text-slate-100 placeholder-rose-300 dark:placeholder-rose-800/70 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+                <p className="text-[11px] text-rose-600 dark:text-rose-400">
+                  Esta justificativa ficará registrada formalmente no histórico, auditoria e na governança do requisito.
+                </p>
+              </div>
+            )}
 
             {/* Justificativa */}
             <div>
