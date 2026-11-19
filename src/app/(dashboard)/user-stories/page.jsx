@@ -24,6 +24,7 @@ import {
   createUserStoryAction,
   updateUserStoryAction,
   deleteUserStoryAction,
+  seedAllReqflowUserStoriesAction,
 } from "@/app/actions/user-stories";
 
 const STATUS_LABELS = {
@@ -136,8 +137,26 @@ export default function UserStoriesPage() {
       setSprints(sprintsData);
       setProjectRequirements(reqs);
 
-      const storiesData = storiesRes?.data || [];
+      let storiesData = storiesRes?.data || [];
       const storiesErr = storiesRes?.error;
+
+      // Auto-lançamento silencioso direto das 25 User Stories do ReqFlow (sem necessidade de botão)
+      if (!storiesErr && storiesData.length < 25 && activeProject?.id) {
+        const isReqflow = activeProject.name?.toLowerCase().includes("reqflow");
+        if (isReqflow || storiesData.length === 0) {
+          const autoRes = await seedAllReqflowUserStoriesAction({ projectId: activeProject.id });
+          if (autoRes.success) {
+            const { data: freshStories } = await supabase
+              .from("user_stories")
+              .select("*")
+              .eq("project_id", activeProject.id)
+              .order("code", { ascending: true });
+            if (freshStories && freshStories.length > 0) {
+              storiesData = freshStories;
+            }
+          }
+        }
+      }
 
       if (!storiesErr && storiesData.length > 0) {
         setStories(storiesData);
