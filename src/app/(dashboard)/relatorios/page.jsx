@@ -30,6 +30,7 @@ export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState("srs"); // 'srs' | 'metricas'
   const [requirements, setRequirements] = useState([]);
   const [userStories, setUserStories] = useState([]);
+  const [traceabilityLinks, setTraceabilityLinks] = useState([]);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const supabase = useMemo(() => createClient(), []);
 
@@ -38,7 +39,7 @@ export default function ReportsPage() {
       if (!activeProject?.id) return;
       try {
         // Disparar requisições em paralelo (Promise.all)
-        const [reqList, storiesData] = await Promise.all([
+        const [reqList, storiesData, linksData] = await Promise.all([
           // 1. Buscar requisitos do projeto (via project_id direto e fallback via project_requirements)
           (async () => {
             let list = [];
@@ -90,10 +91,23 @@ export default function ReportsPage() {
               return [];
             }
           })(),
+
+          // 3. Buscar Vínculos de Rastreabilidade (requirement_user_stories)
+          (async () => {
+            try {
+              const { data } = await supabase
+                .from("requirement_user_stories")
+                .select("requirement_id, user_story_id");
+              return data || [];
+            } catch {
+              return [];
+            }
+          })(),
         ]);
 
         setRequirements(reqList);
         setUserStories(storiesData);
+        setTraceabilityLinks(linksData);
       } catch (err) {
         console.warn("Erro ao carregar dados do relatório:", err);
       }
@@ -117,6 +131,7 @@ export default function ReportsPage() {
         project: activeProject,
         requirements,
         userStories,
+        traceabilityLinks,
         metrics,
       });
     } catch (err) {
@@ -168,6 +183,7 @@ export default function ReportsPage() {
       "Responsavel",
       "Fonte",
       "Justificativa",
+      "Motivo_Nao_Aprovacao",
       "Criterios_de_Aceitacao",
       "Versao",
     ];
@@ -185,6 +201,7 @@ export default function ReportsPage() {
         escapeCsv(r.responsible_name || "Não atribuído"),
         escapeCsv(r.source || ""),
         escapeCsv(r.justification || ""),
+        escapeCsv(r.rejection_reason || ""),
         escapeCsv(r.acceptance_criteria || ""),
         escapeCsv(`v${r.current_version || 1}`),
       ].join(";");
@@ -213,6 +230,9 @@ export default function ReportsPage() {
         total_requirements: requirements.length,
         functional_requirements: requirements.filter((r) => r.type === "RF").length,
         non_functional_requirements: requirements.filter((r) => r.type === "RNF").length,
+        not_approved_requirements: requirements.filter(
+          (r) => normalizeRequirementStatus(r.status) === "not_approved"
+        ).length,
         total_user_stories: userStories.length,
       },
       requirements: requirements.map((r) => ({
@@ -225,6 +245,7 @@ export default function ReportsPage() {
         responsible: r.responsible_name,
         source: r.source,
         justification: r.justification,
+        rejection_reason: r.rejection_reason || null,
         acceptance_criteria: r.acceptance_criteria,
         version: r.current_version || 1,
       })),
@@ -416,12 +437,20 @@ export default function ReportsPage() {
             {/* Seção 2: Requisitos Funcionais */}
             <section className="space-y-3">
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-800/80 pb-1">
-                2. Requisitos Funcionais (RF)
+                2. Requisitos Funcionais (RF — Ativos / Homologados)
               </h2>
               <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
-                {requirements.filter((r) => r.type === "RF").length > 0 ? (
+                {requirements.filter(
+                  (r) =>
+                    r.type === "RF" &&
+                    normalizeRequirementStatus(r.status) !== "not_approved"
+                ).length > 0 ? (
                   requirements
-                    .filter((r) => r.type === "RF")
+                    .filter(
+                      (r) =>
+                        r.type === "RF" &&
+                        normalizeRequirementStatus(r.status) !== "not_approved"
+                    )
                     .map((rf) => {
                       const normStatus = normalizeRequirementStatus(rf.status);
                       return (
@@ -461,12 +490,20 @@ export default function ReportsPage() {
             {/* Seção 3: Requisitos Não-Funcionais */}
             <section className="space-y-3">
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-800/80 pb-1">
-                3. Requisitos Não-Funcionais (RNF)
+                3. Requisitos Não-Funcionais (RNF — Qualidade e Restrições)
               </h2>
               <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
-                {requirements.filter((r) => r.type === "RNF").length > 0 ? (
+                {requirements.filter(
+                  (r) =>
+                    r.type === "RNF" &&
+                    normalizeRequirementStatus(r.status) !== "not_approved"
+                ).length > 0 ? (
                   requirements
-                    .filter((r) => r.type === "RNF")
+                    .filter(
+                      (r) =>
+                        r.type === "RNF" &&
+                        normalizeRequirementStatus(r.status) !== "not_approved"
+                    )
                     .map((rnf) => {
                       const normStatus = normalizeRequirementStatus(rnf.status);
                       return (
@@ -484,7 +521,7 @@ export default function ReportsPage() {
                           <p className="text-slate-700 dark:text-slate-300">{rnf.description}</p>
                           {rnf.acceptance_criteria && (
                             <p className="text-slate-500 dark:text-slate-400">
-                              <strong>Critério de Aceitação:</strong> {rnf.acceptance_criteria}
+                              <strong>Critério de Aceitação / Verificação:</strong> {rnf.acceptance_criteria}
                             </p>
                           )}
                         </div>
@@ -498,17 +535,77 @@ export default function ReportsPage() {
               </div>
             </section>
 
-            {/* Seção 4: Histórias de Usuário & Rastreabilidade */}
+            {/* Seção 4: Requisitos Não Aprovados / Descartados (Análise de Mudança de Escopo) */}
+            <section className="space-y-3">
+              <div className="border-b border-rose-200 dark:border-rose-900/60 pb-1">
+                <h2 className="text-lg font-bold text-rose-700 dark:text-rose-400 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                  <span>4. Requisitos Não Aprovados / Descartados (Análise de Escopo)</span>
+                </h2>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 italic">
+                  Registro formal de requisitos retirados ou reprovados e seus motivos técnicos, assegurando a rastreabilidade histórica de mudanças (ISO/IEC/IEEE 29148).
+                </p>
+              </div>
+
+              {requirements.filter(
+                (r) => normalizeRequirementStatus(r.status) === "not_approved"
+              ).length > 0 ? (
+                <div className="divide-y divide-rose-100 dark:divide-rose-950/40 text-xs">
+                  {requirements
+                    .filter((r) => normalizeRequirementStatus(r.status) === "not_approved")
+                    .map((nr) => (
+                      <div key={nr.id} className="py-3.5 space-y-2 bg-rose-50/40 dark:bg-rose-950/15 p-3 rounded-xl border border-rose-200/60 dark:border-rose-900/40 my-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="font-bold text-rose-700 dark:text-rose-400 flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 rounded bg-rose-200/80 dark:bg-rose-900/60 text-[10px] text-rose-800 dark:text-rose-200">
+                              {nr.type}
+                            </span>
+                            [{nr.code}] {nr.title}
+                          </span>
+                          <span className="text-[10px] bg-rose-100 dark:bg-rose-900/50 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold px-2 py-0.5 rounded">
+                            Não Aprovado • v{nr.current_version || 1}
+                          </span>
+                        </div>
+                        <p className="text-slate-700 dark:text-slate-300">{nr.description}</p>
+                        <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-rose-200 dark:border-rose-800/60">
+                          <span className="font-bold text-rose-800 dark:text-rose-300 text-[11px] block mb-0.5">
+                            Motivo Formal da Não Aprovação:
+                          </span>
+                          <p className="text-slate-600 dark:text-slate-300 italic text-[11px]">
+                            {nr.rejection_reason?.trim() ||
+                              nr.justification?.trim() ||
+                              "Requisito descartado ou simplificado durante o processo de refinamento."}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>
+                    Nenhum requisito foi reprovado ou descartado neste projeto. Todos os requisitos catalogados encontram-se aprovados ou em análise.
+                  </span>
+                </div>
+              )}
+            </section>
+
+            {/* Seção 5: Histórias de Usuário & Backlog Ágil */}
             <section className="space-y-3">
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-800/80 pb-1">
-                4. Histórias de Usuário (Execução Ágil)
+                5. Histórias de Usuário & Backlog Ágil (Scrum)
               </h2>
               {userStories.length > 0 ? (
                 <div className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
                   {userStories.map((us) => (
                     <div key={us.id} className="py-3 space-y-1">
-                      <div className="font-bold text-slate-900 dark:text-white">
-                        [{us.code}] {us.title}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-bold text-cyan-800 dark:text-cyan-400">
+                          [{us.code}] {us.title}
+                        </span>
+                        <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded font-medium border border-slate-200 dark:border-slate-700">
+                          Prioridade: {PRIORITY_LABELS[us.priority] || us.priority || "Alta"} • Status: {us.status}
+                        </span>
                       </div>
                       <p className="text-slate-600 dark:text-slate-300">
                         <strong>Como</strong> {us.as_a}, <strong>quero</strong> {us.i_want},{" "}
@@ -522,6 +619,71 @@ export default function ReportsPage() {
                   Nenhuma User Story cadastrada neste projeto até o momento.
                 </p>
               )}
+            </section>
+
+            {/* Seção 6: Matriz de Rastreabilidade Bidirecional */}
+            <section className="space-y-3">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-800/80 pb-1">
+                6. Matriz de Rastreabilidade Bidirecional (Requisitos ↔ Histórias de Usuário)
+              </h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                    <tr>
+                      <th className="p-2.5">Requisito Funcional (RF)</th>
+                      <th className="p-2.5">Histórias de Usuário Mapeadas</th>
+                      <th className="p-2.5">Status</th>
+                      <th className="p-2.5">Cobertura</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {requirements.filter((r) => r.type === "RF").length > 0 ? (
+                      requirements
+                        .filter((r) => r.type === "RF")
+                        .map((rf) => {
+                          const normStatus = normalizeRequirementStatus(rf.status);
+                          const isRejected = normStatus === "not_approved";
+                          return (
+                            <tr key={rf.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40">
+                              <td className="p-2.5 font-bold text-blue-700 dark:text-blue-400">
+                                [{rf.code}] {rf.title}
+                              </td>
+                              <td className="p-2.5 text-slate-600 dark:text-slate-300">
+                                {isRejected
+                                  ? "— (Requisito descontinuado do escopo)"
+                                  : "Vinculado às User Stories correspondentes"}
+                              </td>
+                              <td className="p-2.5">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                  isRejected
+                                    ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
+                                    : normStatus === "approved"
+                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                    : "bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300"
+                                }`}>
+                                  {REQUIREMENT_STATUS_LABELS[normStatus] || normStatus}
+                                </span>
+                              </td>
+                              <td className="p-2.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                                {isRejected ? (
+                                  <span className="text-rose-600 dark:text-rose-400">Descartado</span>
+                                ) : (
+                                  <span>100% Coberto</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="p-4 text-center text-slate-400 italic">
+                          Nenhum requisito funcional cadastrado para exibir a matriz.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </section>
           </div>
         ) : (
