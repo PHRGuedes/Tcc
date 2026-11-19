@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ProjectProvider } from "@/components/layout/project-context";
 import { PermissionsProvider } from "@/components/layout/permissions-context";
-import { ensureReqflowUserStoriesDirectly } from "@/app/actions/user-stories";
+import { ensureReqflowUserStoriesDirectly } from "@/lib/services/seed-user-stories";
 
 export default async function DashboardLayout({ children }) {
   const supabase = await createClient();
