@@ -17,8 +17,10 @@ import {
   X,
   Mail,
   UserMinus,
+  Menu,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useSidebar } from "@/components/layout/sidebar-context";
 import { useProject } from "@/components/layout/project-context";
 import { usePermissions } from "@/components/layout/permissions-context";
 import { useTheme } from "@/components/layout/theme-provider";
@@ -38,6 +40,7 @@ export function Topbar({ title = "Dashboard" }) {
   const { activeProject, projects, setActiveProject, createProject, refreshProjects } = useProject();
   const { role: projectRole, isOwner } = usePermissions();
   const { theme, toggleTheme } = useTheme();
+  const { setIsMobileOpen } = useSidebar();
 
   const [mounted, setMounted] = useState(false);
   const [showProjectMenu, setShowProjectMenu] = useState(false);
@@ -190,26 +193,37 @@ export function Topbar({ title = "Dashboard" }) {
 
   return (
     <>
-      <header className="h-20 bg-white/95 dark:bg-[#0c1427]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-8 flex items-center justify-between sticky top-0 z-30 transition-colors">
+      <header className="h-20 bg-white/95 dark:bg-[#0c1427]/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 lg:px-8 flex items-center justify-between sticky top-0 z-30 transition-colors">
       {/* Title and Active Project Context */}
-      <div>
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight">
-          {title}
-        </h2>
-        <div className="flex items-center gap-2 mt-0.5">
-          <div className="relative inline-block">
-            <button
-              onClick={() => setShowProjectMenu(!showProjectMenu)}
-              className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors font-medium py-0.5 cursor-pointer"
-            >
-              <span>
-                Projeto:{" "}
-                <strong className="text-slate-800 dark:text-slate-200 font-semibold">
-                  {activeProject?.name || "Nenhum projeto selecionado"}
-                </strong>
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-            </button>
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          type="button"
+          onClick={() => setIsMobileOpen(true)}
+          className="lg:hidden p-2 -ml-1 rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+          aria-label="Abrir menu de navegação"
+          title="Menu de Navegação"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight leading-tight truncate">
+            {title}
+          </h2>
+          <div className="flex items-center gap-2 mt-0.5">
+            <div className="relative inline-block">
+              <button
+                onClick={() => setShowProjectMenu(!showProjectMenu)}
+                className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors font-medium py-0.5 cursor-pointer max-w-[200px] sm:max-w-none truncate"
+              >
+                <span className="truncate">
+                  Projeto:{" "}
+                  <strong className="text-slate-800 dark:text-slate-200 font-semibold">
+                    {activeProject?.name || "Nenhum projeto selecionado"}
+                  </strong>
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
+              </button>
 
             {/* Project Switcher Dropdown */}
             {showProjectMenu && (
@@ -292,6 +306,7 @@ export function Topbar({ title = "Dashboard" }) {
           )}
         </div>
       </div>
+    </div>
 
       {/* Right Controls: Theme Toggle, Notifications & User Profile */}
       <div className="flex items-center gap-3 sm:gap-4">

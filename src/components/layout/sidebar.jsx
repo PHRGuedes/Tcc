@@ -20,15 +20,16 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useSidebar } from "@/components/layout/sidebar-context";
 import { cn } from "@/lib/utils/cn";
 
 export function Sidebar() {
   const pathname = usePathname();
   const { signOut } = useAuth();
+  const { isMobileOpen, setIsMobileOpen } = useSidebar();
 
   const isRequisitosActive = pathname.startsWith("/requisitos");
   const [isRequisitosOpen, setIsRequisitosOpen] = useState(isRequisitosActive);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   // Mantém aberto se a rota ativa for de requisitos
   useEffect(() => {
@@ -67,17 +68,6 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Botão Flutuante Mobile / Tablet (RNF.07) */}
-      <button
-        type="button"
-        onClick={() => setIsMobileOpen(true)}
-        className="lg:hidden fixed bottom-5 right-5 z-50 w-12 h-12 rounded-2xl bg-blue-600 text-white shadow-xl flex items-center justify-center hover:bg-blue-700 transition-all cursor-pointer"
-        aria-label="Abrir menu de navegação"
-        title="Menu de Navegação"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
-
       {/* Backdrop Mobile */}
       {isMobileOpen && (
         <div
