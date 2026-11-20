@@ -293,8 +293,8 @@ export function RequirementsTable({
                               </button>
                             )}
 
-                            {/* Botão Não Aprovar */}
-                            {req.status !== "not_approved" && (
+                            {/* Botão Não Aprovar (Apenas visível se estiver Em Análise) */}
+                            {(req.status === "under_review" || !req.status) && (
                               <button
                                 type="button"
                                 onClick={() => handleStatusClick(req, "not_approved")}
