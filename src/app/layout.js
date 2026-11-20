@@ -1,5 +1,6 @@
 import "./globals.css";
 import { ThemeProvider } from "@/components/layout/theme-provider";
+import { Analytics } from "@vercel/analytics/next";
 
 export const metadata = {
   title: "ReqFlow — Plataforma de Engenharia de Requisitos",
@@ -29,6 +30,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className="min-h-full flex flex-col bg-[#f1f5f9] dark:bg-[#070d17] text-slate-900 dark:text-slate-100 transition-colors duration-150">
         <ThemeProvider>{children}</ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );

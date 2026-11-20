@@ -1,13 +1,24 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { Topbar } from "@/components/layout/topbar";
 import { KpiGrid } from "@/components/modules/dashboard/kpi-grid";
-import { StatusDonutChart } from "@/components/modules/dashboard/status-donut";
 import { ActivityFeed } from "@/components/modules/dashboard/activity-feed";
 import { useProject } from "@/components/layout/project-context";
 import { createClient } from "@/lib/supabase/client";
 import { Skeleton, SkeletonCards } from "@/components/ui/skeleton";
+
+const StatusDonutChart = dynamic(
+  () =>
+    import("@/components/modules/dashboard/status-donut").then(
+      (mod) => mod.StatusDonutChart
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="w-full h-80 rounded-2xl" />,
+  }
+);
 
 export default function DashboardPage() {
   const { activeProject } = useProject();

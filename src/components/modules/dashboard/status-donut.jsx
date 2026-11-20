@@ -2,7 +2,7 @@
 
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
-export function StatusDonutChart({ data, total = 0 }) {
+export function StatusDonutChart({ data, total = 0, compact = false }) {
   const chartData = data || [
     { name: "Aprovados", value: 0, color: "#10b981" },
     { name: "Em Análise", value: 0, color: "#f59e0b" },
@@ -14,17 +14,8 @@ export function StatusDonutChart({ data, total = 0 }) {
     ? chartData
     : [{ name: "Sem dados", value: 1, color: "#94a3b8" }];
 
-  return (
-    <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between transition-colors h-full">
-      <div>
-        <h3 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
-          Distribuição por Status
-        </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-          Requisitos do projeto atual
-        </p>
-      </div>
-
+  const content = (
+    <>
       <div className="relative w-full h-56 flex items-center justify-center my-2">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -70,6 +61,24 @@ export function StatusDonutChart({ data, total = 0 }) {
           </div>
         ))}
       </div>
+    </>
+  );
+
+  if (compact) {
+    return content;
+  }
+
+  return (
+    <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between transition-colors h-full">
+      <div>
+        <h3 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
+          Distribuição por Status
+        </h3>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          Requisitos do projeto atual
+        </p>
+      </div>
+      {content}
     </div>
   );
 }

@@ -1,5 +1,3 @@
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   PRIORITY_LABELS,
   REQUIREMENT_STATUS_LABELS,
@@ -42,16 +40,24 @@ const OFFICIAL_US_TO_REQS_MAP = {
  * Utilitário profissional de geração de Documento ERS (Especificação de Requisitos de Software)
  * Estruturado conforme as normas IEEE Std 830-1998 e ISO/IEC/IEEE 29148:2018.
  *
- * Utiliza exclusivamente codificação padrão compatível com as fontes nativas do jsPDF
- * evitando qualquer caractere corrompido ou sobreposição visual.
+ * Carrega dinamicamente jspdf e jspdf-autotable sob demanda no momento da exportação,
+ * eliminando o peso dessas bibliotecas do bundle inicial da aplicação.
  */
-export function generateProjectReportPDF({
+export async function generateProjectReportPDF({
   project,
   requirements = [],
   userStories = [],
   traceabilityLinks = [],
   metrics = null,
 }) {
+  const [jspdfMod, autoTableMod] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable"),
+  ]);
+
+  const jsPDF = jspdfMod.jsPDF || jspdfMod.default;
+  const autoTable = autoTableMod.default || autoTableMod;
+
   const doc = new jsPDF({
     orientation: "portrait",
     unit: "mm",

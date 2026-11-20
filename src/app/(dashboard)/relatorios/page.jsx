@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
 import {
   FileText,
   Download,
@@ -25,6 +26,17 @@ import {
   REQUIREMENT_STATUS_LABELS,
   normalizeRequirementStatus,
 } from "@/lib/constants/statuses";
+
+const StatusDonutChart = dynamic(
+  () =>
+    import("@/components/modules/dashboard/status-donut").then(
+      (mod) => mod.StatusDonutChart
+    ),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="w-full h-56 rounded-xl" />,
+  }
+);
 
 export default function ReportsPage() {
   const { activeProject } = useProject();
@@ -322,6 +334,14 @@ export default function ReportsPage() {
       byResponsible: Object.entries(byResponsibleMap).sort((a, b) => b[1] - a[1]),
     };
   }, [requirements]);
+
+  const statusChartData = useMemo(() => {
+    return [
+      { name: "Aprovados", value: metrics.byStatus.approved, color: "#10b981" },
+      { name: "Em Análise", value: metrics.byStatus.under_review, color: "#f59e0b" },
+      { name: "Não Aprovados", value: metrics.byStatus.not_approved, color: "#f43f5e" },
+    ];
+  }, [metrics.byStatus]);
 
   return (
     <>
@@ -845,6 +865,8 @@ export default function ReportsPage() {
                     Relatório por Status e Tipo ({metrics.total} requisitos)
                   </h3>
                 </div>
+
+                <StatusDonutChart data={statusChartData} total={metrics.total} compact />
 
                 <div className="space-y-3 text-xs">
                   <div>
