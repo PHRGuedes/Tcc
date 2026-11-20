@@ -36,8 +36,12 @@ export function ProjectProvider({ children }) {
 
   const handleSetActiveProject = useCallback((project) => {
     setActiveProject(project);
-    if (typeof window !== "undefined" && project?.id) {
-      localStorage.setItem(STORAGE_KEY, project.id);
+    if (typeof window !== "undefined") {
+      if (project?.id) {
+        localStorage.setItem(STORAGE_KEY, project.id);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
     }
   }, []);
 

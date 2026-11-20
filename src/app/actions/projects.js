@@ -170,6 +170,69 @@ export async function deleteProjectAction(projectId) {
       };
     }
 
+    // 1. Limpeza defensiva das tabelas filhas para garantir que constraints ou falta de cascade não barrem a exclusão
+    try {
+      // Vínculos entre requisitos e user stories
+      const { data: stories } = await supabase
+        .from("user_stories")
+        .select("id")
+        .eq("project_id", projectId);
+
+      if (stories && stories.length > 0) {
+        const storyIds = stories.map((s) => s.id);
+        await supabase
+          .from("requirement_user_stories")
+          .delete()
+          .in("user_story_id", storyIds);
+      }
+
+      const { data: reqs } = await supabase
+        .from("requirements")
+        .select("id")
+        .eq("project_id", projectId);
+
+      if (reqs && reqs.length > 0) {
+        const reqIds = reqs.map((r) => r.id);
+        await supabase
+          .from("requirement_user_stories")
+          .delete()
+          .in("requirement_id", reqIds);
+
+        await supabase
+          .from("requirement_versions")
+          .delete()
+          .in("requirement_id", reqIds);
+
+        await supabase
+          .from("requirement_stakeholders")
+          .delete()
+          .in("requirement_id", reqIds);
+
+        await supabase
+          .from("requirement_dependencies")
+          .delete()
+          .in("requirement_id", reqIds);
+      }
+
+      // Requisitos e User Stories do projeto
+      await supabase.from("requirements").delete().eq("project_id", projectId);
+      await supabase.from("user_stories").delete().eq("project_id", projectId);
+
+      // Sprints
+      await supabase.from("sprints").delete().eq("project_id", projectId);
+
+      // Convites, funções e membros do projeto
+      await supabase.from("project_invitations").delete().eq("project_id", projectId);
+      await supabase.from("project_roles").delete().eq("project_id", projectId);
+      await supabase.from("project_members").delete().eq("project_id", projectId);
+
+      // Logs de auditoria do projeto
+      await supabase.from("audit_logs").delete().eq("project_id", projectId);
+    } catch (cleanupErr) {
+      console.warn("Aviso na limpeza prévia de tabelas filhas ao excluir projeto:", cleanupErr);
+    }
+
+    // 2. Exclusão do registro principal do projeto
     const { error: deleteError } = await supabase
       .from("projects")
       .delete()
@@ -335,6 +398,7 @@ async function checkIsProjectAdmin(supabase, projectId, userId) {
   if (!projectId || !userId) return false;
 
   try {
+    // 1. Criador do projeto tem permissão total
     const { data: project } = await supabase
       .from("projects")
       .select("created_by")
@@ -343,6 +407,7 @@ async function checkIsProjectAdmin(supabase, projectId, userId) {
 
     if (project?.created_by === userId) return true;
 
+    // 2. Membro com função de admin ou project_manager no projeto
     const { data: member } = await supabase
       .from("project_members")
       .select("role_in_project")
@@ -350,7 +415,26 @@ async function checkIsProjectAdmin(supabase, projectId, userId) {
       .eq("user_id", userId)
       .maybeSingle();
 
-    return member?.role_in_project === "admin";
+    if (
+      member?.role_in_project === "admin" ||
+      member?.role_in_project === "project_manager"
+    ) {
+      return true;
+    }
+
+    // 3. Administrador Global do sistema (perfil da conta)
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (profile?.role === "admin") return true;
+
+    // 4. Caso o projeto legado não tenha created_by registrado, permitir qualquer membro cadastrado
+    if (!project?.created_by && member) return true;
+
+    return false;
   } catch {
     return false;
   }
