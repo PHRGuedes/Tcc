@@ -103,68 +103,17 @@ export default function RequirementsPage() {
           role: m.role_in_project || m.profiles?.role,
           email: m.profiles?.email,
         }));
-      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
-        projectMembers = [
-          { id: "11111111-1111-1111-1111-111111111111", full_name: "Ana Ribeiro" },
-          { id: "22222222-2222-2222-2222-222222222222", full_name: "Carlos Mendes" },
-          { id: "33333333-3333-3333-3333-333333333333", full_name: "Diego Almeida" },
-          { id: "44444444-4444-4444-4444-444444444444", full_name: "Beatriz Souza" },
-        ];
       }
       setStakeholders(projectMembers);
 
       if (usData && usData.length > 0) {
         setUserStories(usData);
-      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
-        setUserStories([
-          { id: "d0000001", code: "US-01", title: "Autenticação de usuários" },
-          { id: "d0000002", code: "US-02", title: "Painel de indicadores" },
-          { id: "d0000003", code: "US-03", title: "Gestão de requisitos (CRUD)" },
-          { id: "d0000004", code: "US-04", title: "Histórico de versões" },
-          { id: "d0000005", code: "US-05", title: "Matriz de rastreabilidade" },
-        ]);
       } else {
         setUserStories([]);
       }
 
       if (projectReqs.length > 0) {
         setRequirements(projectReqs);
-      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
-        setRequirements([
-          {
-            id: "1",
-            code: "REQ-001",
-            title: "Autenticação Segura",
-            description: "O sistema deve permitir que usuários realizem login com e-mail e senha.",
-            type: "RF",
-            priority: "high",
-            status: "approved",
-            responsible_name: "Ana Ribeiro",
-            is_incomplete: false,
-          },
-          {
-            id: "2",
-            code: "REQ-002",
-            title: "Painel de Indicadores",
-            description: "O sistema deve exibir um painel com indicadores de status dos requisitos.",
-            type: "RF",
-            priority: "high",
-            status: "in_development",
-            responsible_name: "Carlos Mendes",
-            is_incomplete: false,
-          },
-          {
-            id: "3",
-            code: "REQ-003",
-            title: "Desempenho de Resposta",
-            description: "O tempo de resposta das páginas não deve exceder 2 segundos.",
-            type: "RNF",
-            priority: "medium",
-            status: "proposed",
-            responsible_name: "Beatriz Souza",
-            is_incomplete: true,
-          },
-        ]);
       } else {
         setRequirements([]);
       }

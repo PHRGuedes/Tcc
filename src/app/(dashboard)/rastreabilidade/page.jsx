@@ -87,13 +87,6 @@ export default function TraceabilityPage() {
             };
           })
           .filter((s) => Boolean(s.id));
-      } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
-        projectMembers = [
-          { id: "stk1", name: "Ana", fullName: "Ana Ribeiro" },
-          { id: "stk2", name: "Carlos", fullName: "Carlos Mendes" },
-          { id: "stk3", name: "Beatriz", fullName: "Beatriz Souza" },
-          { id: "stk4", name: "Diego", fullName: "Diego Almeida" },
-        ];
       }
 
       setStakeholders(projectMembers);

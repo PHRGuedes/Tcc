@@ -1046,27 +1046,6 @@ export default function BacklogPage() {
 
         if (dbSprints && dbSprints.length > 0) {
           setSprints(sortWithSavedOrder(dbSprints));
-        } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
-          setSprints(
-            sortWithSavedOrder([
-              {
-                id: "sprint-demo-2",
-                name: "Sprint 2 — Rastreabilidade & Validação",
-                goal: "Finalizar matriz de rastreabilidade e histórico de versões",
-                start_date: "2026-11-01",
-                end_date: "2026-11-15",
-                status: "active",
-              },
-              {
-                id: "sprint-demo-1",
-                name: "Sprint 1 — MVP Inicial",
-                goal: "Modelagem inicial de requisitos e autenticação",
-                start_date: "2026-10-15",
-                end_date: "2026-10-31",
-                status: "completed",
-              },
-            ])
-          );
         } else {
           setSprints([]);
         }
@@ -1084,81 +1063,6 @@ export default function BacklogPage() {
               rf_count: s.requirement_user_stories?.[0]?.count ?? 0,
             }))
           );
-        } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
-          setStories([
-            {
-              id: "1",
-              code: "US-01",
-              title: "Autenticação de usuários",
-              priority: "high",
-              status: STORY_STATUSES.DONE,
-              sprint_id: "sprint-demo-1",
-              rf_count: 2,
-            },
-            {
-              id: "2",
-              code: "US-02",
-              title: "Painel de indicadores",
-              priority: "high",
-              status: STORY_STATUSES.IN_PROGRESS,
-              sprint_id: "sprint-demo-2",
-              rf_count: 3,
-            },
-            {
-              id: "3",
-              code: "US-03",
-              title: "Gestão de requisitos (CRUD)",
-              priority: "high",
-              status: STORY_STATUSES.IN_PROGRESS,
-              sprint_id: "sprint-demo-2",
-              rf_count: 4,
-            },
-            {
-              id: "4",
-              code: "US-04",
-              title: "Histórico de versões",
-              priority: "medium",
-              status: STORY_STATUSES.TODO,
-              sprint_id: "sprint-demo-2",
-              rf_count: 2,
-            },
-            {
-              id: "5",
-              code: "US-05",
-              title: "Matriz de rastreabilidade",
-              priority: "high",
-              status: STORY_STATUSES.TODO,
-              sprint_id: "sprint-demo-2",
-              rf_count: 3,
-            },
-            {
-              id: "6",
-              code: "US-06",
-              title: "Criptografia de dados",
-              priority: "high",
-              status: STORY_STATUSES.BACKLOG,
-              sprint_id: null,
-              rf_count: 1,
-            },
-            {
-              id: "7",
-              code: "US-07",
-              title: "Exportação de relatórios",
-              priority: "low",
-              status: STORY_STATUSES.BACKLOG,
-              sprint_id: null,
-              rf_count: 2,
-            },
-            {
-              id: "8",
-              code: "US-08",
-              title: "Experiência responsiva",
-              priority: "medium",
-              status: STORY_STATUSES.BACKLOG,
-              sprint_id: null,
-              rf_count: 3,
-            },
-          ]);
         } else {
           setStories([]);
         }

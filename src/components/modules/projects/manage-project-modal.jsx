@@ -657,7 +657,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
                   required
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
-                  placeholder="Ex: Sistema de Gestão Acadêmica"
+                  placeholder="Ex: Plataforma Web de E-commerce"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-[#131c31] transition-all shadow-2xs"
                 />
               </div>

@@ -205,7 +205,7 @@ export function Topbar({ title = "Dashboard" }) {
               <span>
                 Projeto:{" "}
                 <strong className="text-slate-800 dark:text-slate-200 font-semibold">
-                  {activeProject?.name || "Sistema de Gestão Acadêmica"}
+                  {activeProject?.name || "Nenhum projeto selecionado"}
                 </strong>
               </span>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />

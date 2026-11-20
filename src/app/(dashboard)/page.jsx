@@ -112,17 +112,8 @@ export default function DashboardPage() {
             notApproved,
             userStories: userStoriesCount,
           });
-        } else if (activeProject.id === "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa") {
-          // Projeto mock inicial
-          setStats({
-            total: 44,
-            underReview: 18,
-            approved: 21,
-            notApproved: 5,
-            userStories: 12,
-          });
         } else {
-          // Projeto novo vazio
+          // Projeto novo ou vazio: estatísticas zeradas
           setStats({
             total: 0,
             underReview: 0,

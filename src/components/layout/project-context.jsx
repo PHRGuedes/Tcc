@@ -54,13 +54,8 @@ export function ProjectProvider({ children }) {
 
       if (error) {
         console.warn("Aviso ao carregar projetos do Supabase:", error.message);
-        const defaultProject = {
-          id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-          name: "Sistema de Gestão Acadêmica",
-          description: "Sistema acadêmico modular de gestão de matrículas, cursos e notas.",
-        };
-        setProjects([defaultProject]);
-        setActiveProject(defaultProject);
+        setProjects([]);
+        setActiveProject(null);
       } else if (data && data.length > 0) {
         setProjects(data);
 
@@ -72,13 +67,9 @@ export function ProjectProvider({ children }) {
         const matched = data.find((p) => p.id === savedId);
         setActiveProject(matched || data[0]);
       } else {
-        const defaultProject = {
-          id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-          name: "Sistema de Gestão Acadêmica",
-          description: "Sistema acadêmico modular de gestão de matrículas, cursos e notas.",
-        };
-        setProjects([defaultProject]);
-        setActiveProject(defaultProject);
+        // Usuário novo ou sem projetos cadastrados: lista zerada
+        setProjects([]);
+        setActiveProject(null);
       }
     } catch (err) {
       console.warn("Erro ao buscar projetos:", err);
