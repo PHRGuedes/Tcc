@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_PROJECT_ROLES, ALL_PERMISSION_KEYS } from "@/lib/constants/permissions";
 
 /**
@@ -170,77 +171,89 @@ export async function deleteProjectAction(projectId) {
       };
     }
 
+    // Cliente com permissões de administrador (Service Role) para contornar bloqueios silenciosos de RLS
+    const db = createAdminClient() || supabase;
+
     // 1. Limpeza defensiva das tabelas filhas para garantir que constraints ou falta de cascade não barrem a exclusão
     try {
       // Vínculos entre requisitos e user stories
-      const { data: stories } = await supabase
+      const { data: stories } = await db
         .from("user_stories")
         .select("id")
         .eq("project_id", projectId);
 
       if (stories && stories.length > 0) {
         const storyIds = stories.map((s) => s.id);
-        await supabase
+        await db
           .from("requirement_user_stories")
           .delete()
           .in("user_story_id", storyIds);
       }
 
-      const { data: reqs } = await supabase
+      const { data: reqs } = await db
         .from("requirements")
         .select("id")
         .eq("project_id", projectId);
 
       if (reqs && reqs.length > 0) {
         const reqIds = reqs.map((r) => r.id);
-        await supabase
+        await db
           .from("requirement_user_stories")
           .delete()
           .in("requirement_id", reqIds);
 
-        await supabase
+        await db
           .from("requirement_versions")
           .delete()
           .in("requirement_id", reqIds);
 
-        await supabase
+        await db
           .from("requirement_stakeholders")
           .delete()
           .in("requirement_id", reqIds);
 
-        await supabase
+        await db
           .from("requirement_dependencies")
           .delete()
           .in("requirement_id", reqIds);
       }
 
       // Requisitos e User Stories do projeto
-      await supabase.from("requirements").delete().eq("project_id", projectId);
-      await supabase.from("user_stories").delete().eq("project_id", projectId);
+      await db.from("requirements").delete().eq("project_id", projectId);
+      await db.from("user_stories").delete().eq("project_id", projectId);
 
       // Sprints
-      await supabase.from("sprints").delete().eq("project_id", projectId);
+      await db.from("sprints").delete().eq("project_id", projectId);
 
       // Convites, funções e membros do projeto
-      await supabase.from("project_invitations").delete().eq("project_id", projectId);
-      await supabase.from("project_roles").delete().eq("project_id", projectId);
-      await supabase.from("project_members").delete().eq("project_id", projectId);
+      await db.from("project_invitations").delete().eq("project_id", projectId);
+      await db.from("project_roles").delete().eq("project_id", projectId);
+      await db.from("project_members").delete().eq("project_id", projectId);
 
       // Logs de auditoria do projeto
-      await supabase.from("audit_logs").delete().eq("project_id", projectId);
+      await db.from("audit_logs").delete().eq("project_id", projectId);
     } catch (cleanupErr) {
       console.warn("Aviso na limpeza prévia de tabelas filhas ao excluir projeto:", cleanupErr);
     }
 
     // 2. Exclusão do registro principal do projeto
-    const { error: deleteError } = await supabase
+    const { data: deletedRows, error: deleteError } = await db
       .from("projects")
       .delete()
-      .eq("id", projectId);
+      .eq("id", projectId)
+      .select();
 
     if (deleteError) {
       console.error("Erro ao excluir projeto:", deleteError);
       return { success: false, error: deleteError.message };
+    }
+
+    if (!deletedRows || deletedRows.length === 0) {
+      console.warn("Aviso: Nenhuma linha deletada da tabela projects. Verifique a política RLS no Supabase.");
+      return {
+        success: false,
+        error: "A política de segurança (RLS) do Supabase bloqueou a exclusão. Execute a migration de permissão no painel do Supabase.",
+      };
     }
 
     revalidatePath("/", "layout");

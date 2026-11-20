@@ -21,11 +21,11 @@ const ProjectContext = createContext({
   activeProject: null,
   projects: [],
   isLoadingProjects: true,
-  setActiveProject: () => {},
-  refreshProjects: () => {},
-  createProject: async () => {},
-  updateProject: async () => {},
-  deleteProject: async () => {},
+  setActiveProject: () => { },
+  refreshProjects: () => { },
+  createProject: async () => { },
+  updateProject: async () => { },
+  deleteProject: async () => { },
 });
 
 export function ProjectProvider({ children }) {
