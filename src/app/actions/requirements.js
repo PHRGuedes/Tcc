@@ -522,7 +522,7 @@ export async function deleteRequirementAction(id) {
  * 1. Meus Requisitos Globais (project_id IS NULL AND created_by = user.id)
  * 2. De Outros Projetos (onde o usuário é membro, excluindo o projeto atual)
  */
-export async function getAvailableRequirementsForImportAction(targetProjectId) {
+export async function getAvailableRequirementsForImportAction(targetProjectIdOrParams, maybeParams) {
   try {
     const supabase = await createClient();
     const {
@@ -534,72 +534,123 @@ export async function getAvailableRequirementsForImportAction(targetProjectId) {
       return { success: false, error: "Usuário não autenticado." };
     }
 
-    // 1. Requisitos Globais do Usuário
-    let globalReqs = [];
-    const { data: gData, error: gErr } = await supabase
-      .from("requirements")
-      .select("id, code, title, description, type, priority, status")
-      .is("project_id", null)
-      .eq("created_by", user.id)
-      .order("code", { ascending: true });
+    let targetProjectId = targetProjectIdOrParams;
+    let tab = "globals";
+    let page = 1;
+    let pageSize = 20;
+    let search = "";
 
-    if (!gErr && gData) {
-      globalReqs = gData;
-    } else {
-      // Fallback caso a coluna project_id ainda não exista
-      const { data: allUserReqs } = await supabase
-        .from("requirements")
-        .select("id, code, title, description, type, priority, status, source")
-        .eq("created_by", user.id)
-        .order("code", { ascending: true });
-
-      if (allUserReqs && allUserReqs.length > 0) {
-        const { data: linked } = await supabase.from("project_requirements").select("requirement_id");
-        const linkedSet = new Set((linked || []).map((l) => l.requirement_id));
-        globalReqs = allUserReqs.filter((r) => !linkedSet.has(r.id) || r.source?.includes("Biblioteca"));
-      }
+    if (typeof targetProjectIdOrParams === "object" && targetProjectIdOrParams !== null) {
+      targetProjectId = targetProjectIdOrParams.targetProjectId;
+      tab = targetProjectIdOrParams.tab || "globals";
+      page = targetProjectIdOrParams.page || 1;
+      pageSize = targetProjectIdOrParams.pageSize || 20;
+      search = targetProjectIdOrParams.search || "";
+    } else if (maybeParams) {
+      tab = maybeParams.tab || "globals";
+      page = maybeParams.page || 1;
+      pageSize = maybeParams.pageSize || 20;
+      search = maybeParams.search || "";
     }
 
-    // 2. Requisitos de outros projetos vinculados ao usuário
-    let otherProjectReqs = [];
+    // Identificar outros projetos em que o usuário participa
+    let otherProjectIds = [];
     try {
       const { data: userProjects } = await supabase
         .from("project_members")
-        .select("project_id, projects(id, name)")
+        .select("project_id")
         .eq("user_id", user.id);
 
-      const otherProjectIds = (userProjects || [])
+      otherProjectIds = (userProjects || [])
         .map((p) => p.project_id)
         .filter((pid) => pid && pid !== targetProjectId);
+    } catch {}
 
+    // Contagens totais para os badges das abas
+    let totalGlobalsCount = 0;
+    let totalProjectsCount = 0;
+    try {
+      const [gHead, pHead] = await Promise.all([
+        supabase
+          .from("requirements")
+          .select("id", { count: "exact", head: true })
+          .is("project_id", null)
+          .eq("created_by", user.id),
+        otherProjectIds.length > 0
+          ? supabase
+              .from("requirements")
+              .select("id", { count: "exact", head: true })
+              .in("project_id", otherProjectIds)
+          : Promise.resolve({ count: 0 }),
+      ]);
+      totalGlobalsCount = gHead.count || 0;
+      totalProjectsCount = pHead.count || 0;
+    } catch {}
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    const cleanSearch = (search || "").replace(/[,()]/g, "").trim();
+
+    let items = [];
+    let count = 0;
+
+    if (tab === "globals") {
+      let query = supabase
+        .from("requirements")
+        .select("id, code, title, description, type, priority, status", { count: "exact" })
+        .is("project_id", null)
+        .eq("created_by", user.id);
+
+      if (cleanSearch) {
+        query = query.or(
+          `code.ilike.%${cleanSearch}%,title.ilike.%${cleanSearch}%,description.ilike.%${cleanSearch}%`
+        );
+      }
+
+      query = query.order("code", { ascending: true }).range(from, to);
+      const { data, count: exactCount, error } = await query;
+      if (!error && data) {
+        items = data;
+        count = exactCount ?? data.length;
+      }
+    } else {
       if (otherProjectIds.length > 0) {
-        const { data: linkedReqs } = await supabase
-          .from("project_requirements")
-          .select(`
-            project_id,
-            projects:project_id(id, name),
-            requirement:requirements(id, code, title, description, type, priority, status)
-          `)
+        let query = supabase
+          .from("requirements")
+          .select(
+            "id, code, title, description, type, priority, status, project_id, projects:project_id(id, name)",
+            { count: "exact" }
+          )
           .in("project_id", otherProjectIds);
 
-        if (linkedReqs && linkedReqs.length > 0) {
-          otherProjectReqs = linkedReqs
-            .filter((item) => item.requirement)
-            .map((item) => ({
-              ...item.requirement,
-              project_name: item.projects?.name || "Outro Projeto",
-              origin_project_id: item.project_id,
-            }));
+        if (cleanSearch) {
+          query = query.or(
+            `code.ilike.%${cleanSearch}%,title.ilike.%${cleanSearch}%,description.ilike.%${cleanSearch}%`
+          );
+        }
+
+        query = query.order("code", { ascending: true }).range(from, to);
+        const { data, count: exactCount, error } = await query;
+        if (!error && data) {
+          items = data.map((r) => ({
+            ...r,
+            project_name: r.projects?.name || "Outro Projeto",
+            origin_project_id: r.project_id,
+          }));
+          count = exactCount ?? data.length;
         }
       }
-    } catch (projErr) {
-      console.warn("Aviso ao buscar requisitos de outros projetos:", projErr);
     }
 
     return {
       success: true,
-      globals: globalReqs || [],
-      otherProjects: otherProjectReqs || [],
+      data: items,
+      count,
+      globalsCount: totalGlobalsCount,
+      otherProjectsCount: totalProjectsCount,
+      // Compatibilidade
+      globals: tab === "globals" ? items : [],
+      otherProjects: tab === "projects" ? items : [],
     };
   } catch (err) {
     console.error("Erro inesperado em getAvailableRequirementsForImportAction:", err);

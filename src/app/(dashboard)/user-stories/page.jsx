@@ -18,6 +18,8 @@ import {
 import { Topbar } from "@/components/layout/topbar";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Pagination } from "@/components/ui/pagination";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useProject } from "@/components/layout/project-context";
 import { usePermissions } from "@/components/layout/permissions-context";
 import { createClient } from "@/lib/supabase/client";
@@ -49,14 +51,24 @@ export default function UserStoriesPage() {
   const canManageStories = hasPermission("user_stories_manage");
   const supabase = useMemo(() => createClient(), []);
 
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput, 300);
   const [filterStatus, setFilterStatus] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
+
   const [stories, setStories] = useState([]);
   const [sprints, setSprints] = useState([]);
   const [projectRequirements, setProjectRequirements] = useState([]);
   const [storyReqLinks, setStoryReqLinks] = useState({}); // { [storyId]: [reqId, ...] }
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState("");
+
+  // Ao alterar a busca com debounce, voltar para a página 1
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   // Modal Create / Edit
   const [showModal, setShowModal] = useState(false);
@@ -83,6 +95,34 @@ export default function UserStoriesPage() {
     if (!activeProject?.id) return;
     setLoading(true);
     try {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      let storyQuery = supabase
+        .from("user_stories")
+        .select(
+          "id, project_id, code, title, as_a, i_want, so_that, status, priority, sprint_id, created_at",
+          { count: "exact" }
+        )
+        .eq("project_id", activeProject.id);
+
+      if (filterStatus !== "all") {
+        storyQuery = storyQuery.eq("status", filterStatus);
+      }
+
+      if (debouncedSearch.trim()) {
+        const clean = debouncedSearch.replace(/[,()]/g, "").trim();
+        if (clean) {
+          storyQuery = storyQuery.or(
+            `code.ilike.%${clean}%,title.ilike.%${clean}%,as_a.ilike.%${clean}%,i_want.ilike.%${clean}%`
+          );
+        }
+      }
+
+      storyQuery = storyQuery
+        .order("code", { ascending: true })
+        .range(from, to);
+
       // Disparar requisições de Sprints, Requisitos e User Stories em paralelo (Promise.all)
       const [sprintsData, reqs, storiesRes] = await Promise.all([
         // 1. Buscar Sprints do Projeto
@@ -126,12 +166,8 @@ export default function UserStoriesPage() {
           return fetchedReqs;
         })(),
 
-        // 3. Buscar User Stories do Projeto
-        supabase
-          .from("user_stories")
-          .select("id, project_id, code, title, as_a, i_want, so_that, status, priority, sprint_id, created_at")
-          .eq("project_id", activeProject.id)
-          .order("code", { ascending: true }),
+        // 3. Buscar User Stories Paginadas do Projeto com filtros aplicados
+        storyQuery,
       ]);
 
       setSprints(sprintsData);
@@ -142,8 +178,9 @@ export default function UserStoriesPage() {
 
       if (!storiesErr && storiesData.length > 0) {
         setStories(storiesData);
+        setTotalCount(storiesRes?.count ?? storiesData.length);
 
-        // 4. Buscar vínculos requirement_user_stories
+        // 4. Buscar vínculos requirement_user_stories para a página atual
         const storyIds = storiesData.map((s) => s.id);
         const { data: linksData } = await supabase
           .from("requirement_user_stories")
@@ -160,15 +197,17 @@ export default function UserStoriesPage() {
         setStoryReqLinks(mapLinks);
       } else {
         setStories([]);
+        setTotalCount(0);
         setStoryReqLinks({});
       }
     } catch (err) {
       console.warn("Erro ao carregar dados de User Stories:", err);
       setStories([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, [activeProject?.id, supabase]);
+  }, [activeProject?.id, supabase, page, pageSize, debouncedSearch, filterStatus]);
 
   useEffect(() => {
     loadData();
@@ -183,7 +222,7 @@ export default function UserStoriesPage() {
     guardAction(
       "user_stories_manage",
       () => {
-        const nextNum = String(stories.length + 1).padStart(2, "0");
+        const nextNum = String(totalCount + 1).padStart(2, "0");
         setEditingStory(null);
         setFormError("");
         setStoryForm({
@@ -334,21 +373,6 @@ export default function UserStoriesPage() {
     return map;
   }, [sprints]);
 
-  const filteredStories = useMemo(() => {
-    return stories.filter((s) => {
-      const q = search.toLowerCase().trim();
-      const matchSearch =
-        !q ||
-        s.code?.toLowerCase().includes(q) ||
-        s.title?.toLowerCase().includes(q) ||
-        s.as_a?.toLowerCase().includes(q) ||
-        s.i_want?.toLowerCase().includes(q);
-
-      const matchStatus = filterStatus === "all" || s.status === filterStatus;
-      return matchSearch && matchStatus;
-    });
-  }, [stories, search, filterStatus]);
-
   return (
     <>
       <Topbar title="User Stories" />
@@ -377,8 +401,8 @@ export default function UserStoriesPage() {
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Buscar por código, título, persona ou ação da história..."
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300/80 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-950 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
               />
@@ -386,10 +410,13 @@ export default function UserStoriesPage() {
 
             <select
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                setPage(1);
+              }}
               className="w-full sm:w-48 px-3.5 py-2.5 rounded-xl border border-slate-300/80 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="all">Todos os status ({stories.length})</option>
+              <option value="all">Todos os status ({totalCount})</option>
               <option value="backlog">Product Backlog</option>
               <option value="todo">A Fazer</option>
               <option value="in_progress">Em Progresso</option>
@@ -443,7 +470,7 @@ export default function UserStoriesPage() {
               </div>
             ))}
           </div>
-        ) : filteredStories.length === 0 ? (
+        ) : stories.length === 0 ? (
           <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-14 border border-slate-200 dark:border-slate-800 text-center space-y-2">
             <Layers className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto stroke-1" />
             <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
@@ -455,7 +482,7 @@ export default function UserStoriesPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredStories.map((story) => {
+            {stories.map((story) => {
               const linkedReqIds = storyReqLinks[story.id] || [];
               const linkedReqs = linkedReqIds
                 .map((id) => reqByIdMap[id])
@@ -586,6 +613,20 @@ export default function UserStoriesPage() {
             })}
           </div>
         )}
+
+        {/* Barra de Paginação de User Stories */}
+        <Pagination
+          currentPage={page}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          pageSizeOptions={[10, 20, 50]}
+          itemLabel="histórias de usuário"
+        />
       </div>
 
       {/* Modal Criar / Editar User Story */}

@@ -17,6 +17,13 @@ export default function GlobalRequirementsPage() {
   const supabase = useMemo(() => createClient(), []);
 
   const [requirements, setRequirements] = useState([]);
+  const [allRequirements, setAllRequirements] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [filterPriority, setFilterPriority] = useState("all");
   const [loading, setLoading] = useState(true);
 
   // Modais
@@ -32,24 +39,82 @@ export default function GlobalRequirementsPage() {
     if (!user) {
       setLoading(false);
       setRequirements([]);
+      setTotalCount(0);
       return;
     }
 
     setLoading(true);
     try {
-      const res = await getGlobalRequirementsAction();
-      if (res?.success) {
-        setRequirements(res.data || []);
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      let paginatedQuery = supabase
+        .from("requirements")
+        .select(
+          "id, code, title, description, type, priority, status, justification, source, acceptance_criteria, current_version, created_by, user_id, project_id, created_at, updated_at",
+          { count: "exact" }
+        )
+        .is("project_id", null)
+        .or(`created_by.eq.${user.id},user_id.eq.${user.id}`);
+
+      if (filterType !== "all") {
+        paginatedQuery = paginatedQuery.eq("type", filterType);
+      }
+      if (filterPriority !== "all") {
+        paginatedQuery = paginatedQuery.eq("priority", filterPriority);
+      }
+      if (search.trim()) {
+        const clean = search.replace(/[,()]/g, "").trim();
+        if (clean) {
+          paginatedQuery = paginatedQuery.or(
+            `code.ilike.%${clean}%,title.ilike.%${clean}%,description.ilike.%${clean}%`
+          );
+        }
+      }
+
+      paginatedQuery = paginatedQuery
+        .order("code", { ascending: true })
+        .range(from, to);
+
+      const [allReqsRes, paginatedRes] = await Promise.all([
+        // Buscar lista de requisitos globais para dependências e similaridade do modal
+        supabase
+          .from("requirements")
+          .select("id, code, title, description")
+          .is("project_id", null)
+          .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
+          .order("code", { ascending: true })
+          .then(({ data }) => data || []),
+        paginatedQuery,
+      ]);
+
+      setAllRequirements(allReqsRes || []);
+
+      const { data, count, error } = paginatedRes;
+      if (!error && data) {
+        setRequirements(data);
+        setTotalCount(count ?? data.length);
       } else {
         setRequirements([]);
+        setTotalCount(0);
       }
     } catch (err) {
       console.warn("Aviso ao carregar requisitos globais:", err);
       setRequirements([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, [authLoading, user]);
+  }, [
+    authLoading,
+    user,
+    supabase,
+    page,
+    pageSize,
+    search,
+    filterType,
+    filterPriority,
+  ]);
 
   useEffect(() => {
     loadGlobalRequirements();
@@ -86,7 +151,7 @@ export default function GlobalRequirementsPage() {
             setToastMessage("Requisito global salvo na sua biblioteca com sucesso!");
             setTimeout(() => setToastMessage(""), 4000);
           }}
-          existingRequirements={requirements}
+          existingRequirements={allRequirements}
         />
       )}
 
@@ -119,7 +184,7 @@ export default function GlobalRequirementsPage() {
                   Biblioteca Pessoal (Requisitos Globais)
                 </h2>
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300">
-                  {requirements.length} {requirements.length === 1 ? "requisito" : "requisitos"}
+                  {totalCount} {totalCount === 1 ? "requisito" : "requisitos"}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -147,6 +212,29 @@ export default function GlobalRequirementsPage() {
           scope="global"
           requirements={requirements}
           loading={loading}
+          totalCount={totalCount}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          search={search}
+          onSearchChange={(newSearch) => {
+            setSearch(newSearch);
+            setPage(1);
+          }}
+          filterType={filterType}
+          onFilterTypeChange={(newType) => {
+            setFilterType(newType);
+            setPage(1);
+          }}
+          filterPriority={filterPriority}
+          onFilterPriorityChange={(newPriority) => {
+            setFilterPriority(newPriority);
+            setPage(1);
+          }}
           onSelectRequirement={(req) => {
             setSelectedRequirement(req);
             setIsModalOpen(true);

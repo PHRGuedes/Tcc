@@ -21,6 +21,15 @@ export default function RequirementsPage() {
   const canImport = hasPermission("requirements_import");
 
   const [requirements, setRequirements] = useState([]);
+  const [allRequirements, setAllRequirements] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [filterPriority, setFilterPriority] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+
   const [userStories, setUserStories] = useState([]);
   const [stakeholders, setStakeholders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,8 +45,42 @@ export default function RequirementsPage() {
     if (!activeProject?.id) return;
     setLoading(true);
     try {
-      // Disparar membros, user stories e requisitos em paralelo (Promise.all)
-      const [membersRes, usData, projectReqs] = await Promise.all([
+      // Disparar membros, user stories, todos os requisitos (para dependências do modal)
+      // e requisitos paginados com filtros do servidor (Promise.all)
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      let paginatedQuery = supabase
+        .from("requirements")
+        .select(
+          "id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_at, updated_at, profiles:responsible_id(full_name)",
+          { count: "exact" }
+        )
+        .eq("project_id", activeProject.id);
+
+      if (filterType !== "all") {
+        paginatedQuery = paginatedQuery.eq("type", filterType);
+      }
+      if (filterPriority !== "all") {
+        paginatedQuery = paginatedQuery.eq("priority", filterPriority);
+      }
+      if (filterStatus !== "all") {
+        paginatedQuery = paginatedQuery.eq("status", filterStatus);
+      }
+      if (search.trim()) {
+        const clean = search.replace(/[,()]/g, "").trim();
+        if (clean) {
+          paginatedQuery = paginatedQuery.or(
+            `code.ilike.%${clean}%,title.ilike.%${clean}%,description.ilike.%${clean}%`
+          );
+        }
+      }
+
+      paginatedQuery = paginatedQuery
+        .order("code", { ascending: true })
+        .range(from, to);
+
+      const [membersRes, usData, allReqsRes, paginatedRes] = await Promise.all([
         // 1. Buscar stakeholders membros do projeto ativo
         getProjectMembersAction(activeProject.id),
 
@@ -49,65 +92,16 @@ export default function RequirementsPage() {
           .order("code", { ascending: true })
           .then(({ data }) => data || []),
 
-        // 3. Buscar Requisitos vinculados ao PROJETO ATIVO
-        (async () => {
-          let reqs = [];
-          try {
-            const { data: directReqs, error: directErr } = await supabase
-              .from("requirements")
-              .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_at, updated_at, profiles:responsible_id(full_name)")
-              .eq("project_id", activeProject.id)
-              .order("code", { ascending: true });
+        // 3. Buscar lista completa de requisitos para o modal de criação/edição (vínculos e similaridade)
+        supabase
+          .from("requirements")
+          .select("id, code, title, description")
+          .eq("project_id", activeProject.id)
+          .order("code", { ascending: true })
+          .then(({ data }) => data || []),
 
-            if (!directErr && directReqs && directReqs.length > 0) {
-              reqs = directReqs.map((r) => ({
-                ...r,
-                responsible_name: r.profiles?.full_name || "Não atribuído",
-              }));
-            }
-          } catch {}
-
-          if (reqs.length === 0) {
-            try {
-              const { data: linkedData } = await supabase
-                .from("project_requirements")
-                .select(`
-                  requirement:requirements (
-                    id,
-                    code,
-                    title,
-                    description,
-                    type,
-                    priority,
-                    status,
-                    justification,
-                    source,
-                    acceptance_criteria,
-                    rejection_reason,
-                    responsible_id,
-                    project_id,
-                    current_version,
-                    created_at,
-                    updated_at,
-                    profiles:responsible_id(full_name)
-                  )
-                `)
-                .eq("project_id", activeProject.id);
-
-              if (linkedData && linkedData.length > 0) {
-                reqs = linkedData
-                  .map((item) => item.requirement)
-                  .filter(Boolean)
-                  .map((r) => ({
-                    ...r,
-                    responsible_name: r.profiles?.full_name || "Não atribuído",
-                  }))
-                  .sort((a, b) => a.code.localeCompare(b.code));
-              }
-            } catch {}
-          }
-          return reqs;
-        })(),
+        // 4. Buscar requisitos paginados do projeto
+        paginatedQuery,
       ]);
 
       let projectMembers = [];
@@ -120,25 +114,38 @@ export default function RequirementsPage() {
         }));
       }
       setStakeholders(projectMembers);
+      setUserStories(usData || []);
+      setAllRequirements(allReqsRes || []);
 
-      if (usData && usData.length > 0) {
-        setUserStories(usData);
-      } else {
-        setUserStories([]);
-      }
-
-      if (projectReqs.length > 0) {
-        setRequirements(projectReqs);
+      const { data: pageReqs, count, error: pageErr } = paginatedRes;
+      if (!pageErr && pageReqs) {
+        const mapped = pageReqs.map((r) => ({
+          ...r,
+          responsible_name: r.profiles?.full_name || "Não atribuído",
+        }));
+        setRequirements(mapped);
+        setTotalCount(count ?? mapped.length);
       } else {
         setRequirements([]);
+        setTotalCount(0);
       }
     } catch (err) {
       console.warn("Aviso ao carregar requisitos do projeto:", err);
       setRequirements([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
-  }, [activeProject?.id, supabase]);
+  }, [
+    activeProject?.id,
+    supabase,
+    page,
+    pageSize,
+    search,
+    filterType,
+    filterPriority,
+    filterStatus,
+  ]);
 
   useEffect(() => {
     loadData();
@@ -183,7 +190,7 @@ export default function RequirementsPage() {
           }}
           userStories={userStories}
           stakeholders={stakeholders}
-          existingRequirements={requirements}
+          existingRequirements={allRequirements}
         />
       )}
 
@@ -295,6 +302,34 @@ export default function RequirementsPage() {
           scope="project"
           requirements={requirements}
           loading={loading}
+          totalCount={totalCount}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          search={search}
+          onSearchChange={(newSearch) => {
+            setSearch(newSearch);
+            setPage(1);
+          }}
+          filterType={filterType}
+          onFilterTypeChange={(newType) => {
+            setFilterType(newType);
+            setPage(1);
+          }}
+          filterPriority={filterPriority}
+          onFilterPriorityChange={(newPriority) => {
+            setFilterPriority(newPriority);
+            setPage(1);
+          }}
+          filterStatus={filterStatus}
+          onFilterStatusChange={(newStatus) => {
+            setFilterStatus(newStatus);
+            setPage(1);
+          }}
           onSelectRequirement={(req) => {
             setSelectedRequirement(req);
             setIsModalOpen(true);
@@ -313,6 +348,10 @@ export default function RequirementsPage() {
                   : r
               )
             );
+            // Se o filtro de status estiver ativo e divergir do novo status, recarrega
+            if (filterStatus !== "all" && filterStatus !== newStatus) {
+              loadData();
+            }
             const statusLabel =
               newStatus === "approved"
                 ? "Aprovado"

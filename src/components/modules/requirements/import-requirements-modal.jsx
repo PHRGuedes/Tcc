@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   X,
@@ -16,6 +16,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { TypeBadge, PriorityBadge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
+import { useDebounce } from "@/hooks/use-debounce";
 import {
   getAvailableRequirementsForImportAction,
   importRequirementToProjectAction,
@@ -28,9 +30,16 @@ export function ImportRequirementsModal({
   onImportSuccess,
 }) {
   const [activeTab, setActiveTab] = useState("globals"); // 'globals' | 'projects'
-  const [search, setSearch] = useState("");
-  const [globals, setGlobals] = useState([]);
-  const [otherProjects, setOtherProjects] = useState([]);
+  const [searchInput, setSearchInput] = useState("");
+  const debouncedSearch = useDebounce(searchInput, 300);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
+  const [items, setItems] = useState([]);
+  const [globalsCount, setGlobalsCount] = useState(0);
+  const [otherProjectsCount, setOtherProjectsCount] = useState(0);
+
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
@@ -41,48 +50,49 @@ export function ImportRequirementsModal({
     setMounted(true);
   }, []);
 
+  // Ao mudar de busca ou de aba, voltar para a página 1
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, activeTab]);
+
   // Carregar requisitos disponíveis para reutilização
   useEffect(() => {
     if (!isOpen || !activeProject?.id) return;
     setLoading(true);
     setErrorMsg("");
-    setSelectedIds(new Set());
 
     async function loadImportables() {
       try {
-        const res = await getAvailableRequirementsForImportAction(activeProject.id);
+        const res = await getAvailableRequirementsForImportAction({
+          targetProjectId: activeProject.id,
+          tab: activeTab,
+          page,
+          pageSize,
+          search: debouncedSearch,
+        });
+
         if (res.success) {
-          setGlobals(res.globals || []);
-          setOtherProjects(res.otherProjects || []);
+          setItems(res.data || []);
+          setTotalCount(res.count ?? (res.data || []).length);
+          if (res.globalsCount !== undefined) setGlobalsCount(res.globalsCount);
+          if (res.otherProjectsCount !== undefined) setOtherProjectsCount(res.otherProjectsCount);
         } else {
           setErrorMsg(res.error || "Erro ao carregar lista de importação.");
+          setItems([]);
+          setTotalCount(0);
         }
       } catch (err) {
         console.error("Erro ao carregar dados para importação:", err);
         setErrorMsg("Erro inesperado ao consultar requisitos disponíveis.");
+        setItems([]);
+        setTotalCount(0);
       } finally {
         setLoading(false);
       }
     }
 
     loadImportables();
-  }, [isOpen, activeProject?.id]);
-
-  // Lista da aba atual
-  const currentList = activeTab === "globals" ? globals : otherProjects;
-
-  // Filtragem por busca
-  const filteredList = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) return currentList;
-    return currentList.filter(
-      (r) =>
-        r.code?.toLowerCase().includes(q) ||
-        r.title?.toLowerCase().includes(q) ||
-        r.description?.toLowerCase().includes(q) ||
-        r.project_name?.toLowerCase().includes(q)
-    );
-  }, [currentList, search]);
+  }, [isOpen, activeProject?.id, activeTab, page, pageSize, debouncedSearch]);
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
@@ -96,12 +106,19 @@ export function ImportRequirementsModal({
     });
   };
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === filteredList.length && filteredList.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredList.map((r) => r.id)));
-    }
+  const isAllCurrentPageSelected =
+    items.length > 0 && items.every((r) => selectedIds.has(r.id));
+
+  const toggleSelectAllCurrentPage = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isAllCurrentPageSelected) {
+        items.forEach((r) => next.delete(r.id));
+      } else {
+        items.forEach((r) => next.add(r.id));
+      }
+      return next;
+    });
   };
 
   const handleImport = async () => {
@@ -184,7 +201,7 @@ export function ImportRequirementsModal({
               type="button"
               onClick={() => {
                 setActiveTab("globals");
-                setSearch("");
+                setSearchInput("");
               }}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === "globals"
@@ -195,7 +212,7 @@ export function ImportRequirementsModal({
               <Globe className="w-4 h-4" />
               <span>Meus Requisitos Globais</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300">
-                {globals.length}
+                {globalsCount}
               </span>
             </button>
 
@@ -203,7 +220,7 @@ export function ImportRequirementsModal({
               type="button"
               onClick={() => {
                 setActiveTab("projects");
-                setSearch("");
+                setSearchInput("");
               }}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 activeTab === "projects"
@@ -214,39 +231,39 @@ export function ImportRequirementsModal({
               <FolderGit2 className="w-4 h-4" />
               <span>De Outros Projetos</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
-                {otherProjects.length}
+                {otherProjectsCount}
               </span>
             </button>
           </div>
 
-          {/* Search Box & Selecionar Todos */}
+          {/* Search Box & Selecionar Todos da Página */}
           <div className="flex items-center justify-between gap-3 pt-1">
             <div className="relative flex-1">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Filtrar por código, título ou projeto..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
-            {filteredList.length > 0 && (
+            {items.length > 0 && (
               <button
                 type="button"
-                onClick={toggleSelectAll}
+                onClick={toggleSelectAllCurrentPage}
                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors shrink-0 cursor-pointer"
               >
-                {selectedIds.size === filteredList.length ? (
+                {isAllCurrentPageSelected ? (
                   <>
                     <CheckSquare className="w-4 h-4 text-blue-600" />
-                    <span>Desmarcar Todos</span>
+                    <span>Desmarcar Página</span>
                   </>
                 ) : (
                   <>
                     <Square className="w-4 h-4 text-slate-400" />
-                    <span>Selecionar Todos</span>
+                    <span>Selecionar Página</span>
                   </>
                 )}
               </button>
@@ -261,7 +278,7 @@ export function ImportRequirementsModal({
               <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-500" />
               <span>Consultando requisitos disponíveis...</span>
             </div>
-          ) : filteredList.length === 0 ? (
+          ) : items.length === 0 ? (
             <div className="py-16 text-center text-slate-400 dark:text-slate-500">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
                 {activeTab === "globals" ? (
@@ -282,7 +299,7 @@ export function ImportRequirementsModal({
               </p>
             </div>
           ) : (
-            filteredList.map((req) => {
+            items.map((req) => {
               const isSelected = selectedIds.has(req.id);
               return (
                 <div
@@ -330,6 +347,23 @@ export function ImportRequirementsModal({
               );
             })
           )}
+        </div>
+
+        {/* Paginação do Modal */}
+        <div className="px-6 py-2 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-[#0f172a]">
+          <Pagination
+            currentPage={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            onPageChange={(newPage) => setPage(newPage)}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setPage(1);
+            }}
+            pageSizeOptions={[10, 20, 50]}
+            itemLabel="requisitos disponíveis"
+            className="border-none px-0 py-1 shadow-none"
+          />
         </div>
 
         {/* Footer */}

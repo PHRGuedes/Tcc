@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Search, Eye, Pencil, Trash2, AlertTriangle, Layers, Globe, Check, X, RotateCcw, Loader2 } from "lucide-react";
 import { TypeBadge, PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { usePermissions } from "@/components/layout/permissions-context";
 import { updateRequirementStatusAction } from "@/app/actions/requirements";
 import { SkeletonTableRows } from "@/components/ui/skeleton";
+import { Pagination } from "@/components/ui/pagination";
+import { useDebounce } from "@/hooks/use-debounce";
 import {
   PRIORITIES,
   PRIORITY_LABELS,
@@ -18,6 +20,19 @@ export function RequirementsTable({
   scope = "project",
   requirements = [],
   loading = false,
+  totalCount = 0,
+  page = 1,
+  pageSize = 20,
+  onPageChange,
+  onPageSizeChange,
+  search = "",
+  onSearchChange,
+  filterType = "all",
+  onFilterTypeChange,
+  filterPriority = "all",
+  onFilterPriorityChange,
+  filterStatus = "all",
+  onFilterStatusChange,
   onSelectRequirement,
   onDeleteRequirement,
   onStatusChange,
@@ -26,10 +41,19 @@ export function RequirementsTable({
   const canApprove = hasPermission("requirements_approve");
   const [actionInProgressId, setActionInProgressId] = useState(null);
 
-  const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [filterPriority, setFilterPriority] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
+  // Busca com debounce de 300ms
+  const [searchInput, setSearchInput] = useState(search);
+  const debouncedSearch = useDebounce(searchInput, 300);
+
+  useEffect(() => {
+    if (debouncedSearch !== search) {
+      onSearchChange?.(debouncedSearch);
+    }
+  }, [debouncedSearch, search, onSearchChange]);
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
 
   const handleStatusClick = async (req, newStatus) => {
     guardAction(
@@ -69,31 +93,6 @@ export function RequirementsTable({
     );
   };
 
-  // Filtragem dinâmica
-  const filteredRequirements = useMemo(() => {
-    return requirements.filter((req) => {
-      // 1. Busca por ID, título ou descrição
-      const query = search.toLowerCase().trim();
-      const matchSearch =
-        !query ||
-        req.code?.toLowerCase().includes(query) ||
-        req.title?.toLowerCase().includes(query) ||
-        req.description?.toLowerCase().includes(query);
-
-      // 2. Filtro de Tipo (RF / RNF)
-      const matchType = filterType === "all" || req.type === filterType;
-
-      // 3. Filtro de Prioridade
-      const matchPriority = filterPriority === "all" || req.priority === filterPriority;
-
-      // 4. Filtro de Status (apenas no modo 'project')
-      const matchStatus =
-        scope === "global" || filterStatus === "all" || req.status === filterStatus;
-
-      return matchSearch && matchType && matchPriority && matchStatus;
-    });
-  }, [requirements, search, filterType, filterPriority, filterStatus, scope]);
-
   return (
     <div className="space-y-4">
       {/* Search and Filters Bar */}
@@ -104,8 +103,8 @@ export function RequirementsTable({
           <input
             type="text"
             placeholder="Buscar por ID, título ou descrição do requisito..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
           />
         </div>
@@ -119,7 +118,7 @@ export function RequirementsTable({
             </label>
             <select
               value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
+              onChange={(e) => onFilterTypeChange?.(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               <option value="all">Todos os tipos</option>
@@ -135,7 +134,7 @@ export function RequirementsTable({
             </label>
             <select
               value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
+              onChange={(e) => onFilterPriorityChange?.(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
             >
               <option value="all">Todas as prioridades</option>
@@ -155,7 +154,7 @@ export function RequirementsTable({
               </label>
               <select
                 value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+                onChange={(e) => onFilterStatusChange?.(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs font-medium text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
                 <option value="all">Todos os status</option>
@@ -200,7 +199,7 @@ export function RequirementsTable({
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
               {loading ? (
                 <SkeletonTableRows rows={6} columns={scope === "project" ? 7 : 6} />
-              ) : filteredRequirements.length === 0 ? (
+              ) : requirements.length === 0 ? (
                 <tr>
                   <td
                     colSpan={scope === "project" ? 7 : 6}
@@ -212,7 +211,7 @@ export function RequirementsTable({
                   </td>
                 </tr>
               ) : (
-                filteredRequirements.map((req) => (
+                requirements.map((req) => (
                   <tr
                     key={req.id}
                     className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors group"
@@ -368,6 +367,17 @@ export function RequirementsTable({
           </table>
         </div>
       </div>
+
+      {/* Barra de Paginação */}
+      <Pagination
+        currentPage={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+        pageSizeOptions={[10, 20, 50]}
+        itemLabel={scope === "global" ? "requisitos globais" : "requisitos"}
+      />
     </div>
   );
 }
