@@ -146,7 +146,7 @@ export default function UserStoriesPage() {
             if (!directErr && directReqs && directReqs.length > 0) {
               fetchedReqs = directReqs;
             }
-          } catch {}
+          } catch { }
 
           if (fetchedReqs.length === 0) {
             try {
@@ -161,7 +161,7 @@ export default function UserStoriesPage() {
                   .filter(Boolean)
                   .sort((a, b) => (a.code || "").localeCompare(b.code || ""));
               }
-            } catch {}
+            } catch { }
           }
           return fetchedReqs;
         })(),
@@ -426,9 +426,8 @@ export default function UserStoriesPage() {
 
           <button
             onClick={handleOpenCreate}
-            className={`w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs transition-all shrink-0 ${
-              canManageStories ? "cursor-pointer" : "opacity-60 hover:opacity-85 cursor-not-allowed"
-            }`}
+            className={`w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs transition-all shrink-0 ${canManageStories ? "cursor-pointer" : "opacity-60 hover:opacity-85 cursor-not-allowed"
+              }`}
             title={
               canManageStories
                 ? "Criar uma nova User Story vinculada a requisitos"
@@ -507,11 +506,10 @@ export default function UserStoriesPage() {
                     <div className="flex items-center gap-2.5 flex-wrap">
                       {/* Badge da Sprint */}
                       <span
-                        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
-                          linkedSprint
-                            ? "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60"
-                            : "bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800"
-                        }`}
+                        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${linkedSprint
+                          ? "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/60"
+                          : "bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800"
+                          }`}
                       >
                         <Calendar className="w-3 h-3" />
                         <span>{linkedSprint ? linkedSprint.name : "Sem Sprint"}</span>
@@ -520,9 +518,8 @@ export default function UserStoriesPage() {
                       <PriorityBadge priority={story.priority} />
 
                       <span
-                        className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${
-                          STATUS_BADGE_STYLES[story.status] || STATUS_BADGE_STYLES.backlog
-                        }`}
+                        className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${STATUS_BADGE_STYLES[story.status] || STATUS_BADGE_STYLES.backlog
+                          }`}
                       >
                         {STATUS_LABELS[story.status] || "Product Backlog"}
                       </span>
@@ -533,9 +530,8 @@ export default function UserStoriesPage() {
                           type="button"
                           onClick={() => handleOpenEdit(story)}
                           title="Editar história e vínculos"
-                          className={`p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer ${
-                            !canManageStories ? "opacity-60" : ""
-                          }`}
+                          className={`p-1.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer ${!canManageStories ? "opacity-60" : ""
+                            }`}
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
@@ -549,9 +545,8 @@ export default function UserStoriesPage() {
                             )
                           }
                           title="Excluir história de usuário"
-                          className={`p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer ${
-                            !canManageStories ? "opacity-60" : ""
-                          }`}
+                          className={`p-1.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer ${!canManageStories ? "opacity-60" : ""
+                            }`}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -736,8 +731,8 @@ export default function UserStoriesPage() {
                           nextSprintId && prev.status === "backlog"
                             ? "todo"
                             : !nextSprintId
-                            ? "backlog"
-                            : prev.status,
+                              ? "backlog"
+                              : prev.status,
                       }));
                     }}
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 cursor-pointer"
@@ -816,11 +811,10 @@ export default function UserStoriesPage() {
                       return (
                         <label
                           key={req.id}
-                          className={`flex items-center justify-between px-3.5 py-2 text-xs cursor-pointer transition-colors ${
-                            isChecked
-                              ? "bg-blue-50/70 dark:bg-blue-950/30"
-                              : "hover:bg-slate-100/70 dark:hover:bg-slate-900/60"
-                          }`}
+                          className={`flex items-center justify-between px-3.5 py-2 text-xs cursor-pointer transition-colors ${isChecked
+                            ? "bg-blue-50/70 dark:bg-blue-950/30"
+                            : "hover:bg-slate-100/70 dark:hover:bg-slate-900/60"
+                            }`}
                         >
                           <div className="flex items-center gap-2.5 min-w-0 pr-2">
                             <input

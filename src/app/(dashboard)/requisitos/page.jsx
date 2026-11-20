@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Download, CheckCircle2 } from "lucide-react";
+import { Plus, Download, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { RequirementsTable } from "@/components/modules/requirements/requirements-table";
 import { RequirementModal } from "@/components/modules/requirements/requirement-modal";
@@ -11,6 +11,7 @@ import { usePermissions } from "@/components/layout/permissions-context";
 import { createClient } from "@/lib/supabase/client";
 import { getProjectMembersAction } from "@/app/actions/projects";
 import { deleteRequirementAction } from "@/app/actions/requirements";
+import { seedAllReqflowRequirementsAction } from "@/app/actions/seed-reqflow";
 
 export default function RequirementsPage() {
   const { activeProject } = useProject();
@@ -39,48 +40,50 @@ export default function RequirementsPage() {
   const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [isSeeding, setIsSeeding] = useState(false);
 
   // Carregar dados de requisitos e relacionamentos vinculados ao activeProject
   const loadData = useCallback(async () => {
     if (!activeProject?.id) return;
     setLoading(true);
     try {
-      // Disparar membros, user stories, todos os requisitos (para dependências do modal)
-      // e requisitos paginados com filtros do servidor (Promise.all)
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      let paginatedQuery = supabase
-        .from("requirements")
-        .select(
-          "id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_at, updated_at, profiles:responsible_id(full_name)",
-          { count: "exact" }
-        )
-        .eq("project_id", activeProject.id);
+      // Helper para montar a query paginada com colunas dinâmicas (resiliente caso rejection_reason ainda não exista)
+      const buildQuery = (columns) => {
+        let q = supabase
+          .from("requirements")
+          .select(columns, { count: "exact" })
+          .eq("project_id", activeProject.id);
 
-      if (filterType !== "all") {
-        paginatedQuery = paginatedQuery.eq("type", filterType);
-      }
-      if (filterPriority !== "all") {
-        paginatedQuery = paginatedQuery.eq("priority", filterPriority);
-      }
-      if (filterStatus !== "all") {
-        paginatedQuery = paginatedQuery.eq("status", filterStatus);
-      }
-      if (search.trim()) {
-        const clean = search.replace(/[,()]/g, "").trim();
-        if (clean) {
-          paginatedQuery = paginatedQuery.or(
-            `code.ilike.%${clean}%,title.ilike.%${clean}%,description.ilike.%${clean}%`
-          );
+        if (filterType !== "all") {
+          q = q.eq("type", filterType);
         }
-      }
+        if (filterPriority !== "all") {
+          q = q.eq("priority", filterPriority);
+        }
+        if (filterStatus !== "all") {
+          q = q.eq("status", filterStatus);
+        }
+        if (search.trim()) {
+          const clean = search.replace(/[,()]/g, "").trim();
+          if (clean) {
+            q = q.or(
+              `code.ilike.%${clean}%,title.ilike.%${clean}%,description.ilike.%${clean}%`
+            );
+          }
+        }
 
-      paginatedQuery = paginatedQuery
-        .order("code", { ascending: true })
-        .range(from, to);
+        return q.order("code", { ascending: true }).range(from, to);
+      };
 
-      const [membersRes, usData, allReqsRes, paginatedRes] = await Promise.all([
+      const COLS_FULL =
+        "id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_at, updated_at, profiles:responsible_id(full_name)";
+      const COLS_SAFE =
+        "id, code, title, description, type, priority, status, justification, source, acceptance_criteria, responsible_id, project_id, current_version, created_at, updated_at, profiles:responsible_id(full_name)";
+
+      const [membersRes, usData, allReqsRes, initialPaginatedRes] = await Promise.all([
         // 1. Buscar stakeholders membros do projeto ativo
         getProjectMembersAction(activeProject.id),
 
@@ -101,8 +104,19 @@ export default function RequirementsPage() {
           .then(({ data }) => data || []),
 
         // 4. Buscar requisitos paginados do projeto
-        paginatedQuery,
+        buildQuery(COLS_FULL),
       ]);
+
+      let paginatedRes = initialPaginatedRes;
+      // Se falhar porque a coluna rejection_reason ainda não foi aplicada no schema do Supabase (Migration 0011),
+      // reexecuta defensivamente com a lista de colunas seguras (COLS_SAFE)
+      if (
+        paginatedRes.error &&
+        (paginatedRes.error.message?.includes("rejection_reason") ||
+          paginatedRes.error.code === "42703")
+      ) {
+        paginatedRes = await buildQuery(COLS_SAFE);
+      }
 
       let projectMembers = [];
       if (membersRes?.success && membersRes.data?.length > 0) {
@@ -115,7 +129,69 @@ export default function RequirementsPage() {
       }
       setStakeholders(projectMembers);
       setUserStories(usData || []);
-      setAllRequirements(allReqsRes || []);
+
+      let fullReqs = allReqsRes || [];
+
+      // Fallback defensivo: se não encontrou requisitos diretamente por project_id,
+      // verifica se estão vinculados via tabela associativa project_requirements (legado/migração)
+      if (
+        (!paginatedRes.data || paginatedRes.data.length === 0) &&
+        page === 1 &&
+        !search.trim() &&
+        filterType === "all" &&
+        filterPriority === "all" &&
+        filterStatus === "all"
+      ) {
+        try {
+          const { data: linkedData } = await supabase
+            .from("project_requirements")
+            .select(`
+              requirement:requirements (
+                id,
+                code,
+                title,
+                description,
+                type,
+                priority,
+                status,
+                justification,
+                source,
+                acceptance_criteria,
+                responsible_id,
+                project_id,
+                current_version,
+                created_at,
+                updated_at,
+                profiles:responsible_id(full_name)
+              )
+            `)
+            .eq("project_id", activeProject.id);
+
+          if (linkedData && linkedData.length > 0) {
+            const linkedReqs = linkedData
+              .map((item) => item.requirement)
+              .filter(Boolean)
+              .sort((a, b) => (a.code || "").localeCompare(b.code || ""));
+
+            paginatedRes = {
+              data: linkedReqs.slice(from, to + 1),
+              count: linkedReqs.length,
+              error: null,
+            };
+
+            if (fullReqs.length === 0) {
+              fullReqs = linkedReqs.map((r) => ({
+                id: r.id,
+                code: r.code,
+                title: r.title,
+                description: r.description,
+              }));
+            }
+          }
+        } catch {}
+      }
+
+      setAllRequirements(fullReqs);
 
       const { data: pageReqs, count, error: pageErr } = paginatedRes;
       if (!pageErr && pageReqs) {
@@ -146,6 +222,35 @@ export default function RequirementsPage() {
     filterPriority,
     filterStatus,
   ]);
+
+  // Carga dos 55 Requisitos Oficiais do ReqFlow (Dogfooding / Apresentação)
+  const handleSeedReqflow = async () => {
+    if (!activeProject?.id) {
+      alert("Selecione um projeto antes de carregar os requisitos.");
+      return;
+    }
+    const confirmed = window.confirm(
+      `Deseja carregar a especificação oficial dos 55 requisitos do sistema no projeto "${activeProject.name}"?\n\n` +
+      `Isso incluirá o catálogo completo de requisitos funcionais e não-funcionais com critérios de aceitação e rastreabilidade.`
+    );
+    if (!confirmed) return;
+
+    setIsSeeding(true);
+    try {
+      const res = await seedAllReqflowRequirementsAction({ projectId: activeProject.id });
+      if (res.success) {
+        setToastMessage(res.message || "55 requisitos do ReqFlow carregados com sucesso!");
+        await loadData();
+      } else {
+        alert(res.error || "Erro ao carregar requisitos do ReqFlow.");
+      }
+    } catch (err) {
+      console.error("Erro ao carregar requisitos:", err);
+      alert("Erro inesperado ao processar os requisitos.");
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -244,6 +349,25 @@ export default function RequirementsPage() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Botão Carga Oficial ReqFlow (55 Requisitos) */}
+            <button
+              onClick={handleSeedReqflow}
+              disabled={isSeeding || !canCreate}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 rounded-xl transition-all shadow-2xs ${
+                canCreate && !isSeeding
+                  ? "hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer"
+                  : "opacity-60 cursor-not-allowed"
+              }`}
+              title="Carregar ou sincronizar os 55 requisitos oficiais do ReqFlow neste projeto"
+            >
+              {isSeeding ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              )}
+              <span>{isSeeding ? "Carregando 55 Requisitos..." : "Carregar Catálogo (55)"}</span>
+            </button>
+
             {/* Botão Importar / Reutilizar (RF.33 / RF.34) */}
             <button
               onClick={() =>

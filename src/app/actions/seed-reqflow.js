@@ -692,7 +692,7 @@ export async function seedAllReqflowRequirementsAction({ projectId }) {
         .from("requirements")
         .upsert(toUpdate, { onConflict: "id" });
 
-      if (updErr && updErr.message?.includes("rejection_reason")) {
+      if (updErr && (updErr.message?.includes("rejection_reason") || updErr.code === "42703")) {
         const retryUpdates = toUpdate.map((p) => {
           const copy = { ...p };
           delete copy.rejection_reason;
@@ -726,7 +726,7 @@ export async function seedAllReqflowRequirementsAction({ projectId }) {
         .insert(insertPayloads)
         .select("id, code");
 
-      if (insErr && insErr.message?.includes("rejection_reason")) {
+      if (insErr && (insErr.message?.includes("rejection_reason") || insErr.code === "42703")) {
         const retryPayloads = insertPayloads.map((p) => {
           const copy = { ...p };
           delete copy.rejection_reason;

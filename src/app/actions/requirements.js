@@ -229,7 +229,7 @@ export async function createRequirementAction(payload) {
       insertRes = await supabase
         .from("requirements")
         .insert(reqData)
-        .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
+        .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, responsible_id, project_id, current_version, created_by, created_at, updated_at")
         .single();
     }
 
@@ -254,7 +254,7 @@ export async function createRequirementAction(payload) {
         let fallbackRes = await supabase
           .from("requirements")
           .insert(fallbackData)
-          .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
+          .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, responsible_id, project_id, current_version, created_by, created_at, updated_at")
           .single();
 
         // Se falhar pela constraint de status antiga que não aceita 'not_approved'
@@ -267,7 +267,7 @@ export async function createRequirementAction(payload) {
           fallbackRes = await supabase
             .from("requirements")
             .insert(fallbackData)
-            .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
+            .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, responsible_id, project_id, current_version, created_by, created_at, updated_at")
             .single();
         }
 
@@ -412,7 +412,7 @@ export async function updateRequirementAction(id, payload) {
         .from("requirements")
         .update(updateData)
         .eq("id", id)
-        .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
+        .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, responsible_id, project_id, current_version, created_by, created_at, updated_at")
         .single();
       if (!retryUpdate.error) {
         updatedReq = retryUpdate.data;
@@ -904,7 +904,7 @@ export async function updateRequirementStatusAction({ id, status, projectId, rej
         .from("requirements")
         .update(updatePayload)
         .eq("id", id)
-        .select("id, status, rejection_reason, current_version, updated_at")
+        .select("id, status, current_version, updated_at")
         .maybeSingle();
       if (!retryWithoutCol.error) {
         updated = retryWithoutCol.data;
@@ -925,7 +925,7 @@ export async function updateRequirementStatusAction({ id, status, projectId, rej
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
-        .select("id, status, rejection_reason, current_version, updated_at")
+        .select("id, status, current_version, updated_at")
         .maybeSingle();
 
       if (!retryRes.error) {
