@@ -32,7 +32,7 @@ export async function createSprintAction({ projectId, name, goal, startDate, end
         end_date: endDate || null,
         status: "active",
       })
-      .select()
+      .select("id, project_id, name, goal, start_date, end_date, status, created_at")
       .single();
 
     if (error) {
@@ -69,7 +69,7 @@ export async function archiveSprintAction(sprintId, archive = true) {
       .from("sprints")
       .update({ status: targetStatus })
       .eq("id", sprintId)
-      .select()
+      .select("id, project_id, name, goal, start_date, end_date, status, created_at")
       .single();
 
     if (error) {
@@ -150,7 +150,7 @@ export async function updateStoryPlacementAction(storyId, { status, sprintId }) 
       .from("user_stories")
       .update(updatePayload)
       .eq("id", storyId)
-      .select()
+      .select("id, project_id, code, title, status, priority, sprint_id, created_at")
       .single();
 
     if (error) {

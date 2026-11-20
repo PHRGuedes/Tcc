@@ -1,18 +1,16 @@
 -- Migration: 0012_performance_indexes.sql
 -- Descrição: Criação de índices B-tree para otimizar as consultas e filtros mais frequentes do ReqFlow.
 -- Abrange filtros (.eq), ordenações (.order), junções de chaves estrangeiras e cláusulas RLS.
+-- Observação: colunas já cobertas por constraints UNIQUE (que criam índice automaticamente)
+-- ou pela coluna inicial de outro índice composto não recebem índice adicional.
 
 -- ============================================================================
 -- 1. REQUISITOS (requirements)
 -- ============================================================================
 
--- Atende: Dashboard (contagens gerais), Backlog, Matriz de Rastreabilidade e listagens por projeto.
--- Acelera: supabase.from('requirements').select(...).eq('project_id', projectId)
-CREATE INDEX IF NOT EXISTS idx_requirements_project_id
-    ON public.requirements (project_id);
-
--- Atende: Dashboard (gráficos de distribuição por status: Aprovados, Em Análise, Não Aprovados) e Relatórios ERS.
--- Acelera: supabase.from('requirements').select(...).eq('project_id', projectId).eq('status', status)
+-- Atende: Dashboard (gráficos de distribuição por status), Backlog, Rastreabilidade, Relatórios ERS
+-- e listagens por projeto (o índice também serve para filtros apenas por project_id).
+-- Acelera: supabase.from('requirements').select(...).eq('project_id', projectId)[.eq('status', status)]
 CREATE INDEX IF NOT EXISTS idx_requirements_project_id_status
     ON public.requirements (project_id, status);
 
@@ -26,33 +24,20 @@ CREATE INDEX IF NOT EXISTS idx_requirements_global_user_code
 -- ============================================================================
 -- 2. HISTÓRIAS DE USUÁRIO (user_stories)
 -- ============================================================================
-
--- Atende: Dashboard (métrica de Histórias de Usuário), Rastreabilidade e Backlog do Projeto.
--- Acelera: supabase.from('user_stories').select(...).eq('project_id', projectId)
-CREATE INDEX IF NOT EXISTS idx_user_stories_project_id
-    ON public.user_stories (project_id);
+-- Filtros por project_id e ordenação por code já são cobertos pela constraint UNIQUE (project_id, code).
 
 -- Atende: Backlog Scrum e Visualização de Sprint ativa (src/app/actions/sprints.js).
 -- Acelera: Filtros de histórias de usuário pertencentes a uma sprint específica.
 CREATE INDEX IF NOT EXISTS idx_user_stories_sprint_id
     ON public.user_stories (sprint_id);
 
--- Atende: Rastreabilidade e Backlog ordenados pelo código da história (US-01, US-02...).
--- Acelera: supabase.from('user_stories').select(...).eq('project_id', projectId).order('code', { ascending: true })
-CREATE INDEX IF NOT EXISTS idx_user_stories_project_id_code
-    ON public.user_stories (project_id, code);
-
 
 -- ============================================================================
 -- 3. SPRINTS (sprints)
 -- ============================================================================
 
--- Atende: Backlog Scrum e listagem de sprints do projeto.
--- Acelera: supabase.from('sprints').select(...).eq('project_id', projectId)
-CREATE INDEX IF NOT EXISTS idx_sprints_project_id
-    ON public.sprints (project_id);
-
--- Atende: Backlog e histórico de Sprints com ordenação cronológica.
+-- Atende: Backlog Scrum e histórico de Sprints com ordenação cronológica
+-- (o índice também serve para filtros apenas por project_id).
 -- Acelera: supabase.from('sprints').select(...).eq('project_id', projectId).order('created_at', { ascending: false })
 CREATE INDEX IF NOT EXISTS idx_sprints_project_id_created_at
     ON public.sprints (project_id, created_at DESC);
@@ -76,26 +61,18 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_created_at
 -- ============================================================================
 -- 5. MEMBROS DO PROJETO (project_members)
 -- ============================================================================
+-- Filtros por project_id já são cobertos pela constraint UNIQUE (project_id, user_id).
 
 -- Atende: Topbar / Contexto de Projetos do Usuário e validação de permissões nas RLS.
 -- Acelera: supabase.from('project_members').select(...).eq('user_id', userId)
 CREATE INDEX IF NOT EXISTS idx_project_members_user_id
     ON public.project_members (user_id);
 
--- Atende: Modal de Configurações do Projeto (Lista de Membros e seus papéis).
--- Acelera: supabase.from('project_members').select(...).eq('project_id', projectId)
-CREATE INDEX IF NOT EXISTS idx_project_members_project_id
-    ON public.project_members (project_id);
-
 
 -- ============================================================================
 -- 6. VÍNCULOS REQUISITOS <-> HISTÓRIAS DE USUÁRIO (requirement_user_stories)
 -- ============================================================================
-
--- Atende: Matriz de Rastreabilidade Bidirecional (busca de histórias vinculadas ao requisito).
--- Acelera: supabase.from('requirement_user_stories').select(...).eq('requirement_id', reqId) ou .in('requirement_id', reqIds)
-CREATE INDEX IF NOT EXISTS idx_requirement_user_stories_req_id
-    ON public.requirement_user_stories (requirement_id);
+-- Filtros por requirement_id já são cobertos pela constraint UNIQUE (requirement_id, user_story_id).
 
 -- Atende: Tela de Histórias / Backlog (busca de requisitos vinculados à história de usuário).
 -- Acelera: supabase.from('requirement_user_stories').select(...).eq('user_story_id', storyId) ou .in('user_story_id', storyIds)
@@ -106,11 +83,7 @@ CREATE INDEX IF NOT EXISTS idx_requirement_user_stories_story_id
 -- ============================================================================
 -- 7. STAKEHOLDERS DE REQUISITOS (requirement_stakeholders)
 -- ============================================================================
-
--- Atende: Matriz de Rastreabilidade e Modal de Requisitos (stakeholders associados ao requisito).
--- Acelera: supabase.from('requirement_stakeholders').select(...).eq('requirement_id', reqId) ou .in('requirement_id', reqIds)
-CREATE INDEX IF NOT EXISTS idx_requirement_stakeholders_req_id
-    ON public.requirement_stakeholders (requirement_id);
+-- Filtros por requirement_id já são cobertos pela constraint UNIQUE (requirement_id, stakeholder_id).
 
 -- Atende: Análise de Impacto por Stakeholder (requisitos vinculados a um stakeholder específico).
 -- Acelera: supabase.from('requirement_stakeholders').select(...).eq('stakeholder_id', stakeholderId)
@@ -144,23 +117,9 @@ CREATE INDEX IF NOT EXISTS idx_project_invitations_project_status
 
 
 -- ============================================================================
--- 10. FUNÇÕES E PERMISSÕES DO PROJETO (project_roles)
+-- 10. DEPENDÊNCIAS DE REQUISITOS (requirement_dependencies)
 -- ============================================================================
-
--- Atende: Gestão de Membros e Consulta de Papéis Personalizados do Projeto.
--- Acelera: supabase.from('project_roles').select(...).eq('project_id', projectId).order('created_at', { ascending: true })
-CREATE INDEX IF NOT EXISTS idx_project_roles_project_id
-    ON public.project_roles (project_id);
-
-
--- ============================================================================
--- 11. DEPENDÊNCIAS DE REQUISITOS (requirement_dependencies)
--- ============================================================================
-
--- Atende: Grafo de Dependências e Matriz de Rastreabilidade (busca por dependências de origem).
--- Acelera: supabase.from('requirement_dependencies').select(...).eq('source_req_id', reqId)
-CREATE INDEX IF NOT EXISTS idx_requirement_dependencies_source
-    ON public.requirement_dependencies (source_req_id);
+-- Filtros por source_req_id já são cobertos pela constraint UNIQUE (source_req_id, target_req_id, dependency_type).
 
 -- Atende: Grafo de Dependências e Matriz de Rastreabilidade (busca por dependências de destino).
 -- Acelera: supabase.from('requirement_dependencies').select(...).eq('target_req_id', reqId)
@@ -169,13 +128,16 @@ CREATE INDEX IF NOT EXISTS idx_requirement_dependencies_target
 
 
 -- ============================================================================
--- 12. PROJETOS (projects)
+-- 11. PROJETOS (projects)
 -- ============================================================================
 
 -- Atende: Topbar / Seletor de Projetos e Validação de Propriedade (projetos criados pelo usuário).
 -- Acelera: supabase.from('projects').select(...).eq('created_by', userId)
 CREATE INDEX IF NOT EXISTS idx_projects_created_by
     ON public.projects (created_by);
+
+-- Observação: project_roles não recebe índice adicional, pois a constraint UNIQUE (project_id, slug)
+-- já cobre os filtros por project_id.
 
 -- Recarregar cache de esquema do PostgREST
 NOTIFY pgrst, 'reload schema';

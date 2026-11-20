@@ -1021,7 +1021,7 @@ export default function BacklogPage() {
         // 1. Buscar todas as sprints do projeto
         const { data: dbSprints } = await supabase
           .from("sprints")
-          .select("*")
+          .select("id, project_id, name, goal, start_date, end_date, status, created_at")
           .eq("project_id", activeProject.id)
           .order("created_at", { ascending: false });
 
@@ -1053,7 +1053,7 @@ export default function BacklogPage() {
         // 2. Buscar histórias de usuário vinculadas ao projeto
         const { data: dbStories } = await supabase
           .from("user_stories")
-          .select("*, requirement_user_stories(count)")
+          .select("id, project_id, code, title, status, priority, sprint_id, created_at, requirement_user_stories(count)")
           .eq("project_id", activeProject.id);
 
         if (dbStories && dbStories.length > 0) {

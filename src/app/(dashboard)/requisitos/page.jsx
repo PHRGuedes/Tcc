@@ -55,7 +55,7 @@ export default function RequirementsPage() {
           try {
             const { data: directReqs, error: directErr } = await supabase
               .from("requirements")
-              .select("*, profiles:responsible_id(full_name)")
+              .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_at, updated_at, profiles:responsible_id(full_name)")
               .eq("project_id", activeProject.id)
               .order("code", { ascending: true });
 
@@ -73,7 +73,22 @@ export default function RequirementsPage() {
                 .from("project_requirements")
                 .select(`
                   requirement:requirements (
-                    *,
+                    id,
+                    code,
+                    title,
+                    description,
+                    type,
+                    priority,
+                    status,
+                    justification,
+                    source,
+                    acceptance_criteria,
+                    rejection_reason,
+                    responsible_id,
+                    project_id,
+                    current_version,
+                    created_at,
+                    updated_at,
                     profiles:responsible_id(full_name)
                   )
                 `)

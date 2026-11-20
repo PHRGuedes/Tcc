@@ -128,7 +128,7 @@ export default function UserStoriesPage() {
         // 3. Buscar User Stories do Projeto
         supabase
           .from("user_stories")
-          .select("*")
+          .select("id, project_id, code, title, as_a, i_want, so_that, status, priority, sprint_id, created_at")
           .eq("project_id", activeProject.id)
           .order("code", { ascending: true }),
       ]);

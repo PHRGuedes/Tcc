@@ -72,7 +72,7 @@ export async function createUserStoryAction(payload) {
     const { data: newStory, error: insertErr } = await supabase
       .from("user_stories")
       .insert(insertData)
-      .select()
+      .select("id, project_id, code, title, as_a, i_want, so_that, status, priority, sprint_id, responsible_id, created_at, updated_at")
       .single();
 
     if (insertErr) {
@@ -169,7 +169,7 @@ export async function updateUserStoryAction(storyId, payload) {
       .from("user_stories")
       .update(updateData)
       .eq("id", storyId)
-      .select()
+      .select("id, project_id, code, title, as_a, i_want, so_that, status, priority, sprint_id, responsible_id, created_at, updated_at")
       .single();
 
     if (updateErr) {

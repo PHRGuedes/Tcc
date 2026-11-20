@@ -42,7 +42,7 @@ export async function getGlobalRequirementsAction() {
     try {
       const { data: globalReqs, error: globalErr } = await supabase
         .from("requirements")
-        .select("*")
+        .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, current_version, created_by, user_id, project_id, created_at, updated_at")
         .is("project_id", null)
         .or(`created_by.eq.${user.id},user_id.eq.${user.id}`)
         .order("code", { ascending: true });
@@ -56,7 +56,7 @@ export async function getGlobalRequirementsAction() {
     try {
       const { data: allUserReqs, error: userErr } = await supabase
         .from("requirements")
-        .select("*")
+        .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, current_version, created_by, user_id, project_id, created_at, updated_at")
         .eq("created_by", user.id)
         .order("code", { ascending: true });
 
@@ -221,7 +221,7 @@ export async function createRequirementAction(payload) {
     let insertRes = await supabase
       .from("requirements")
       .insert(reqData)
-      .select()
+      .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
       .single();
 
     if (insertRes.error && (insertRes.error.message?.includes("rejection_reason") || isMissingColumnError(insertRes.error))) {
@@ -229,7 +229,7 @@ export async function createRequirementAction(payload) {
       insertRes = await supabase
         .from("requirements")
         .insert(reqData)
-        .select()
+        .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
         .single();
     }
 
@@ -254,7 +254,7 @@ export async function createRequirementAction(payload) {
         let fallbackRes = await supabase
           .from("requirements")
           .insert(fallbackData)
-          .select()
+          .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
           .single();
 
         // Se falhar pela constraint de status antiga que não aceita 'not_approved'
@@ -267,7 +267,7 @@ export async function createRequirementAction(payload) {
           fallbackRes = await supabase
             .from("requirements")
             .insert(fallbackData)
-            .select()
+            .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
             .single();
         }
 
@@ -403,7 +403,7 @@ export async function updateRequirementAction(id, payload) {
       .from("requirements")
       .update(updateData)
       .eq("id", id)
-      .select()
+      .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
       .single();
 
     if (updateError && (updateError.message?.includes("rejection_reason") || isMissingColumnError(updateError))) {
@@ -412,7 +412,7 @@ export async function updateRequirementAction(id, payload) {
         .from("requirements")
         .update(updateData)
         .eq("id", id)
-        .select()
+        .select("id, code, title, description, type, priority, status, justification, source, acceptance_criteria, rejection_reason, responsible_id, project_id, current_version, created_by, created_at, updated_at")
         .single();
       if (!retryUpdate.error) {
         updatedReq = retryUpdate.data;
@@ -538,7 +538,7 @@ export async function getAvailableRequirementsForImportAction(targetProjectId) {
     let globalReqs = [];
     const { data: gData, error: gErr } = await supabase
       .from("requirements")
-      .select("*")
+      .select("id, code, title, description, type, priority, status")
       .is("project_id", null)
       .eq("created_by", user.id)
       .order("code", { ascending: true });
@@ -549,7 +549,7 @@ export async function getAvailableRequirementsForImportAction(targetProjectId) {
       // Fallback caso a coluna project_id ainda não exista
       const { data: allUserReqs } = await supabase
         .from("requirements")
-        .select("*")
+        .select("id, code, title, description, type, priority, status, source")
         .eq("created_by", user.id)
         .order("code", { ascending: true });
 
@@ -578,7 +578,7 @@ export async function getAvailableRequirementsForImportAction(targetProjectId) {
           .select(`
             project_id,
             projects:project_id(id, name),
-            requirement:requirements(*)
+            requirement:requirements(id, code, title, description, type, priority, status)
           `)
           .in("project_id", otherProjectIds);
 
@@ -630,7 +630,7 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
     // 1. Obter os dados originais dos requisitos a serem clonados
     const { data: originals, error: fetchErr } = await supabase
       .from("requirements")
-      .select("*")
+      .select("id, code, title, description, type, priority, justification, source, acceptance_criteria")
       .in("id", requirementIds);
 
     if (fetchErr || !originals || originals.length === 0) {
@@ -703,7 +703,7 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
       const insertRes = await supabase
         .from("requirements")
         .insert(clonePayload)
-        .select()
+        .select("id, code")
         .single();
 
       if (insertRes.error && isMissingColumnError(insertRes.error)) {
@@ -715,7 +715,7 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
         const fbRes = await supabase
           .from("requirements")
           .insert(fallbackData)
-          .select()
+          .select("id, code")
           .single();
 
         if (!fbRes.error) newReq = fbRes.data;
@@ -818,7 +818,7 @@ export async function updateRequirementStatusAction({ id, status, projectId, rej
       .from("requirements")
       .update(updatePayload)
       .eq("id", id)
-      .select()
+      .select("id, status, rejection_reason, current_version, updated_at")
       .maybeSingle();
 
     // Se falhar porque a coluna rejection_reason ainda não foi aplicada no schema do Supabase
@@ -828,7 +828,7 @@ export async function updateRequirementStatusAction({ id, status, projectId, rej
         .from("requirements")
         .update(updatePayload)
         .eq("id", id)
-        .select()
+        .select("id, status, rejection_reason, current_version, updated_at")
         .maybeSingle();
       if (!retryWithoutCol.error) {
         updated = retryWithoutCol.data;
@@ -849,7 +849,7 @@ export async function updateRequirementStatusAction({ id, status, projectId, rej
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
-        .select()
+        .select("id, status, rejection_reason, current_version, updated_at")
         .maybeSingle();
 
       if (!retryRes.error) {

@@ -33,7 +33,7 @@ export async function createProjectAction({ name, description }) {
         description: description?.trim() || "Novo projeto de requisitos",
         created_by: user.id,
       })
-      .select()
+      .select("id, name, description, created_by, created_at, updated_at")
       .single();
 
     if (insertError) {
@@ -110,7 +110,7 @@ export async function updateProjectAction({ projectId, name, description }) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", projectId)
-      .select()
+      .select("id, name, description, created_by, created_at, updated_at")
       .single();
 
     if (updateError) {
@@ -241,7 +241,7 @@ export async function deleteProjectAction(projectId) {
       .from("projects")
       .delete()
       .eq("id", projectId)
-      .select();
+      .select("id");
 
     if (deleteError) {
       console.error("Erro ao excluir projeto:", deleteError);
@@ -743,7 +743,7 @@ export async function respondProjectInvitationAction({ invitationId, accept }) {
     // 1. Obter os dados do convite pendente
     const { data: invite, error: fetchErr } = await supabase
       .from("project_invitations")
-      .select("*, projects(id, name)")
+      .select("id, project_id, invited_user_id, role_in_project, status, projects(id, name)")
       .eq("id", invitationId)
       .eq("invited_user_id", user.id)
       .eq("status", "pending")
@@ -1209,7 +1209,7 @@ export async function getProjectRolesAction(projectId) {
     // 1. Tentar buscar da tabela project_roles
     const { data, error } = await supabase
       .from("project_roles")
-      .select("*")
+      .select("id, project_id, name, slug, description, is_system, permissions, created_at")
       .eq("project_id", projectId)
       .order("created_at", { ascending: true });
 
@@ -1233,7 +1233,7 @@ export async function getProjectRolesAction(projectId) {
       const { data: seeded, error: seedErr } = await supabase
         .from("project_roles")
         .insert(rowsToInsert)
-        .select("*")
+        .select("id, project_id, name, slug, description, is_system, permissions, created_at")
         .order("created_at", { ascending: true });
 
       if (seedErr) {
@@ -1277,7 +1277,7 @@ export async function saveProjectRoleAction({ projectId, roleId, permissions, na
     // Buscar a função alvo
     const { data: role } = await supabase
       .from("project_roles")
-      .select("*")
+      .select("id, project_id, name, slug, description, is_system, permissions")
       .eq("id", roleId)
       .eq("project_id", projectId)
       .maybeSingle();
@@ -1310,7 +1310,7 @@ export async function saveProjectRoleAction({ projectId, roleId, permissions, na
       .from("project_roles")
       .update(updatePayload)
       .eq("id", roleId)
-      .select("*")
+      .select("id, project_id, name, slug, description, is_system, permissions, created_at")
       .single();
 
     if (error) {
@@ -1373,7 +1373,7 @@ export async function createCustomProjectRoleAction({ projectId, name, descripti
         is_system: false,
         permissions: permissions || {},
       })
-      .select("*")
+      .select("id, project_id, name, slug, description, is_system, permissions, created_at")
       .single();
 
     if (error) {

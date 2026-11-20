@@ -30,7 +30,7 @@ export function useAuth() {
 
           const { data: profileData } = await supabase
             .from("profiles")
-            .select("*")
+            .select("id, full_name, email, avatar_url, role")
             .eq("id", user.id)
             .single();
 
@@ -66,7 +66,7 @@ export function useAuth() {
         setUser(session.user);
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("*")
+          .select("id, full_name, email, avatar_url, role")
           .eq("id", session.user.id)
           .single();
         if (profileData) {
@@ -106,7 +106,7 @@ export function useAuth() {
         setUser(currentUser);
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("*")
+          .select("id, full_name, email, avatar_url, role")
           .eq("id", currentUser.id)
           .single();
 
