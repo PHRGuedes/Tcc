@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Plus, Download, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Download, CheckCircle2 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { RequirementsTable } from "@/components/modules/requirements/requirements-table";
 import { RequirementModal } from "@/components/modules/requirements/requirement-modal";
@@ -11,7 +11,6 @@ import { usePermissions } from "@/components/layout/permissions-context";
 import { createClient } from "@/lib/supabase/client";
 import { getProjectMembersAction } from "@/app/actions/projects";
 import { deleteRequirementAction } from "@/app/actions/requirements";
-import { seedAllReqflowRequirementsAction } from "@/app/actions/seed-reqflow";
 
 export default function RequirementsPage() {
   const { activeProject } = useProject();
@@ -40,7 +39,6 @@ export default function RequirementsPage() {
   const [selectedRequirement, setSelectedRequirement] = useState(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-  const [isSeeding, setIsSeeding] = useState(false);
 
   // Carregar dados de requisitos e relacionamentos vinculados ao activeProject
   const loadData = useCallback(async () => {
@@ -223,35 +221,6 @@ export default function RequirementsPage() {
     filterStatus,
   ]);
 
-  // Carga dos 55 Requisitos Oficiais do ReqFlow (Dogfooding / Apresentação)
-  const handleSeedReqflow = async () => {
-    if (!activeProject?.id) {
-      alert("Selecione um projeto antes de carregar os requisitos.");
-      return;
-    }
-    const confirmed = window.confirm(
-      `Deseja carregar a especificação oficial dos 55 requisitos do sistema no projeto "${activeProject.name}"?\n\n` +
-      `Isso incluirá o catálogo completo de requisitos funcionais e não-funcionais com critérios de aceitação e rastreabilidade.`
-    );
-    if (!confirmed) return;
-
-    setIsSeeding(true);
-    try {
-      const res = await seedAllReqflowRequirementsAction({ projectId: activeProject.id });
-      if (res.success) {
-        setToastMessage(res.message || "55 requisitos do ReqFlow carregados com sucesso!");
-        await loadData();
-      } else {
-        alert(res.error || "Erro ao carregar requisitos do ReqFlow.");
-      }
-    } catch (err) {
-      console.error("Erro ao carregar requisitos:", err);
-      alert("Erro inesperado ao processar os requisitos.");
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -349,25 +318,6 @@ export default function RequirementsPage() {
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* Botão Carga Oficial ReqFlow (55 Requisitos) */}
-            <button
-              onClick={handleSeedReqflow}
-              disabled={isSeeding || !canCreate}
-              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 rounded-xl transition-all shadow-2xs ${
-                canCreate && !isSeeding
-                  ? "hover:bg-indigo-100 dark:hover:bg-indigo-900/50 cursor-pointer"
-                  : "opacity-60 cursor-not-allowed"
-              }`}
-              title="Carregar ou sincronizar os 55 requisitos oficiais do ReqFlow neste projeto"
-            >
-              {isSeeding ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
-              ) : (
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              )}
-              <span>{isSeeding ? "Carregando 55 Requisitos..." : "Carregar Catálogo (55)"}</span>
-            </button>
-
             {/* Botão Importar / Reutilizar (RF.33 / RF.34) */}
             <button
               onClick={() =>
