@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Download, Check, Network, CheckCircle2, Loader2 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
+import { SkeletonTable } from "@/components/ui/skeleton";
 import { useProject } from "@/components/layout/project-context";
 import { usePermissions } from "@/components/layout/permissions-context";
 import { createClient } from "@/lib/supabase/client";
@@ -16,6 +17,7 @@ export default function TraceabilityPage() {
     hasPermission("requirements_create_edit") || hasPermission("user_stories_manage");
   const supabase = useMemo(() => createClient(), []);
 
+  const [loading, setLoading] = useState(true);
   const [requirements, setRequirements] = useState([]);
   const [userStories, setUserStories] = useState([]);
   const [stakeholders, setStakeholders] = useState([]);
@@ -24,7 +26,11 @@ export default function TraceabilityPage() {
   const [saveFeedback, setSaveFeedback] = useState("");
 
   const loadMatrixData = useCallback(async () => {
-    if (!activeProject?.id) return;
+    if (!activeProject?.id) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
 
     try {
       // Disparar membros, requisitos e histórias de usuário em paralelo (Promise.all)
@@ -135,6 +141,8 @@ export default function TraceabilityPage() {
       console.warn("Erro ao buscar dados da matriz:", err);
       setRequirements([]);
       setUserStories([]);
+    } finally {
+      setLoading(false);
     }
   }, [activeProject?.id, supabase]);
 
@@ -272,7 +280,9 @@ export default function TraceabilityPage() {
           </div>
 
           {/* Grid da Matriz */}
-          {requirements.length === 0 ? (
+          {loading ? (
+            <SkeletonTable rows={7} columns={6} />
+          ) : requirements.length === 0 ? (
             <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
               <Network className="w-8 h-8 text-slate-300 dark:text-slate-600 stroke-1" />
               <p className="font-semibold text-slate-600 dark:text-slate-300">

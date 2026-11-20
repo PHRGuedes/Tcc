@@ -7,9 +7,11 @@ import { StatusDonutChart } from "@/components/modules/dashboard/status-donut";
 import { ActivityFeed } from "@/components/modules/dashboard/activity-feed";
 import { useProject } from "@/components/layout/project-context";
 import { createClient } from "@/lib/supabase/client";
+import { Skeleton, SkeletonCards } from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
   const { activeProject } = useProject();
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     total: 0,
     underReview: 0,
@@ -22,7 +24,11 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadDashboardData() {
-      if (!activeProject?.id) return;
+      if (!activeProject?.id) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
 
       try {
         // Disparar requisições em paralelo (Promise.all) para evitar waterfalls
@@ -141,6 +147,8 @@ export default function DashboardPage() {
         }
       } catch (err) {
         console.warn("Dashboard fetch:", err);
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -156,17 +164,56 @@ export default function DashboardPage() {
   return (
     <>
       <Topbar title="Dashboard" />
-      <div className="p-8 max-w-7xl w-full mx-auto">
-        <KpiGrid stats={stats} />
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:span-5 lg:col-span-5">
-            <StatusDonutChart data={chartData} total={stats.total} />
-          </div>
-          <div className="lg:span-7 lg:col-span-7">
-            <ActivityFeed activities={activities} />
-          </div>
-        </div>
+      <div className="p-8 max-w-7xl w-full mx-auto space-y-6">
+        {loading ? (
+          <>
+            <SkeletonCards count={4} />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] p-6 shadow-2xs space-y-4">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-3 w-56" />
+                <div className="flex items-center justify-center py-6">
+                  <Skeleton className="h-44 w-44 rounded-full" />
+                </div>
+                <div className="space-y-2 pt-2">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-4/5" />
+                </div>
+              </div>
+              <div className="lg:col-span-7 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] p-6 shadow-2xs space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="space-y-1">
+                    <Skeleton className="h-5 w-36" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                </div>
+                <div className="space-y-3 pt-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 py-2">
+                      <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                      <div className="space-y-1.5 flex-1">
+                        <Skeleton className="h-3.5 w-3/4" />
+                        <Skeleton className="h-2.5 w-1/4" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <KpiGrid stats={stats} />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:span-5 lg:col-span-5">
+                <StatusDonutChart data={chartData} total={stats.total} />
+              </div>
+              <div className="lg:span-7 lg:col-span-7">
+                <ActivityFeed activities={activities} />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   );

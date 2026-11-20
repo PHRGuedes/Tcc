@@ -5,6 +5,7 @@ import { Search, Eye, Pencil, Trash2, AlertTriangle, Layers, Globe, Check, X, Ro
 import { TypeBadge, PriorityBadge, StatusBadge } from "@/components/ui/badge";
 import { usePermissions } from "@/components/layout/permissions-context";
 import { updateRequirementStatusAction } from "@/app/actions/requirements";
+import { SkeletonTableRows } from "@/components/ui/skeleton";
 import {
   PRIORITIES,
   PRIORITY_LABELS,
@@ -198,14 +199,7 @@ export function RequirementsTable({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 text-xs">
               {loading ? (
-                <tr>
-                  <td
-                    colSpan={scope === "project" ? 7 : 6}
-                    className="py-12 text-center text-slate-400 dark:text-slate-500"
-                  >
-                    Carregando requisitos...
-                  </td>
-                </tr>
+                <SkeletonTableRows rows={6} columns={scope === "project" ? 7 : 6} />
               ) : filteredRequirements.length === 0 ? (
                 <tr>
                   <td

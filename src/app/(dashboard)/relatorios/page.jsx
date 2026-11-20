@@ -19,6 +19,7 @@ import {
 import { Topbar } from "@/components/layout/topbar";
 import { useProject } from "@/components/layout/project-context";
 import { createClient } from "@/lib/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   PRIORITY_LABELS,
   REQUIREMENT_STATUS_LABELS,
@@ -27,6 +28,7 @@ import {
 
 export default function ReportsPage() {
   const { activeProject } = useProject();
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("srs"); // 'srs' | 'metricas'
   const [requirements, setRequirements] = useState([]);
   const [userStories, setUserStories] = useState([]);
@@ -36,7 +38,11 @@ export default function ReportsPage() {
 
   useEffect(() => {
     async function loadReportData() {
-      if (!activeProject?.id) return;
+      if (!activeProject?.id) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
       try {
         // Disparar requisições em paralelo (Promise.all)
         const [reqList, storiesData, linksData] = await Promise.all([
@@ -110,6 +116,8 @@ export default function ReportsPage() {
         setTraceabilityLinks(linksData);
       } catch (err) {
         console.warn("Erro ao carregar dados do relatório:", err);
+      } finally {
+        setLoading(false);
       }
     }
     loadReportData();
@@ -384,7 +392,43 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {activeTab === "srs" ? (
+        {loading ? (
+          <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-8 md:p-10 border border-slate-200 dark:border-slate-800 shadow-sm max-w-4xl mx-auto space-y-8">
+            <div className="border-b border-slate-200 dark:border-slate-800 pb-6 space-y-3">
+              <Skeleton className="h-4 w-48 rounded-md" />
+              <Skeleton className="h-8 w-3/4" />
+              <Skeleton className="h-5 w-48" />
+              <div className="flex gap-4 pt-2">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+            </div>
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-36" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-4 w-4/6" />
+              </div>
+            </div>
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-48" />
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-2">
+                    <div className="flex justify-between">
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-4 w-24 rounded-full" />
+                    </div>
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : activeTab === "srs" ? (
           /* SRS Document Preview */
           <div
             id="srs-document"

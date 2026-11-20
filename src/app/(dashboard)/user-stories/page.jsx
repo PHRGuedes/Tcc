@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { PriorityBadge, StatusBadge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useProject } from "@/components/layout/project-context";
 import { usePermissions } from "@/components/layout/permissions-context";
 import { createClient } from "@/lib/supabase/client";
@@ -414,8 +415,33 @@ export default function UserStoriesPage() {
 
         {/* List of User Stories */}
         {loading ? (
-          <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-12 border border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">
-            Carregando histórias de usuário do projeto...
+          <div className="space-y-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-6 w-16 rounded-lg" />
+                    <Skeleton className="h-5 w-64" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                    <Skeleton className="h-6 w-28 rounded-full" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Skeleton className="h-5 w-20 rounded-md" />
+                  <Skeleton className="h-5 w-20 rounded-md" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : filteredStories.length === 0 ? (
           <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-14 border border-slate-200 dark:border-slate-800 text-center space-y-2">

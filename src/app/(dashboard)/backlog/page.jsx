@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { Topbar } from "@/components/layout/topbar";
 import { PriorityBadge } from "@/components/ui/badge";
+import { Skeleton, SkeletonKanban } from "@/components/ui/skeleton";
 import { useProject } from "@/components/layout/project-context";
 import { usePermissions } from "@/components/layout/permissions-context";
 import { createClient } from "@/lib/supabase/client";
@@ -998,6 +999,7 @@ export default function BacklogPage() {
   const canDeleteSprints = hasPermission("sprints_delete");
   const canMoveCards = hasPermission("kanban_move_cards");
 
+  const [loading, setLoading] = useState(true);
   const [sprints, setSprints] = useState([]);
   const [stories, setStories] = useState([]);
   const [collapsedSprints, setCollapsedSprints] = useState({});
@@ -1016,7 +1018,11 @@ export default function BacklogPage() {
 
   useEffect(() => {
     async function loadBacklog() {
-      if (!activeProject?.id) return;
+      if (!activeProject?.id) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
       try {
         // 1. Buscar todas as sprints do projeto
         const { data: dbSprints } = await supabase
@@ -1069,6 +1075,8 @@ export default function BacklogPage() {
       } catch (err) {
         console.warn("Erro ao carregar backlog do Supabase:", err);
         setStories([]);
+      } finally {
+        setLoading(false);
       }
     }
 
@@ -1412,12 +1420,31 @@ export default function BacklogPage() {
         </div>
 
         {/* 1. BACKLOG DO PRODUTO: SEMPRE NO INÍCIO DA PÁGINA (ACIMA DAS SPRINTS) */}
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "move";
-            if (!isDropOverGeneralBacklog) setIsDropOverGeneralBacklog(true);
-          }}
+        {loading ? (
+          <div className="space-y-6">
+            <div className="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-6 w-6 rounded-md" />
+                  <Skeleton className="h-5 w-48" />
+                </div>
+                <Skeleton className="h-6 w-24 rounded-full" />
+              </div>
+              <div className="space-y-3">
+                <Skeleton className="h-14 w-full rounded-xl" />
+                <Skeleton className="h-14 w-full rounded-xl" />
+              </div>
+            </div>
+            <SkeletonKanban columns={2} cardsPerColumn={2} />
+          </div>
+        ) : (
+          <>
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (!isDropOverGeneralBacklog) setIsDropOverGeneralBacklog(true);
+              }}
           onDragLeave={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget)) {
               setIsDropOverGeneralBacklog(false);
@@ -1593,6 +1620,8 @@ export default function BacklogPage() {
             </div>
           )}
         </div>
+        </>
+      )}
       </div>
     </>
   );
