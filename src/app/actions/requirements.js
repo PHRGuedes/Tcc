@@ -667,7 +667,11 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
     let importedCount = 0;
     const importedCodes = [];
 
-    // 3. Executar cópia profunda de cada requisito
+    // 3. Montar payloads e executar cópia profunda em lote
+    const clonePayloads = [];
+    const codeToOriginalMap = new Map();
+    const codeToPayloadMap = new Map();
+
     for (const original of originals) {
       let codeToUse = original.code?.trim().toUpperCase();
 
@@ -699,53 +703,74 @@ export async function importRequirementToProjectAction({ targetProjectId, requir
         current_version: 1,
       };
 
-      let newReq = null;
-      const insertRes = await supabase
+      clonePayloads.push(clonePayload);
+      codeToOriginalMap.set(codeToUse, original);
+      codeToPayloadMap.set(codeToUse, clonePayload);
+    }
+
+    let insertedReqs = [];
+    let insertRes = await supabase
+      .from("requirements")
+      .insert(clonePayloads)
+      .select("id, code");
+
+    if (insertRes.error && isMissingColumnError(insertRes.error)) {
+      // Fallback sem project_id caso a coluna ainda não exista no Postgres
+      const fallbackPayloads = clonePayloads.map((p) => {
+        const copy = { ...p };
+        delete copy.project_id;
+        delete copy.user_id;
+        return copy;
+      });
+
+      const fbRes = await supabase
         .from("requirements")
-        .insert(clonePayload)
-        .select("id, code")
-        .single();
+        .insert(fallbackPayloads)
+        .select("id, code");
 
-      if (insertRes.error && isMissingColumnError(insertRes.error)) {
-        // Fallback sem project_id caso a coluna ainda não exista no Postgres
-        const fallbackData = { ...clonePayload };
-        delete fallbackData.project_id;
-        delete fallbackData.user_id;
-
-        const fbRes = await supabase
-          .from("requirements")
-          .insert(fallbackData)
-          .select("id, code")
-          .single();
-
-        if (!fbRes.error) newReq = fbRes.data;
-      } else if (!insertRes.error) {
-        newReq = insertRes.data;
+      if (!fbRes.error && fbRes.data) {
+        insertedReqs = fbRes.data;
       }
+    } else if (!insertRes.error && insertRes.data) {
+      insertedReqs = insertRes.data;
+    }
 
-      if (newReq?.id) {
-        importedCount++;
-        importedCodes.push(newReq.code);
+    if (insertedReqs.length > 0) {
+      importedCount = insertedReqs.length;
+      insertedReqs.forEach((r) => {
+        importedCodes.push(r.code);
+      });
 
-        // Vincular ao projeto em project_requirements
-        try {
-          await supabase.from("project_requirements").insert({
-            project_id: targetProjectId,
-            requirement_id: newReq.id,
-          });
-        } catch {}
+      // 1. Vincular em lote ao projeto em project_requirements
+      const projectReqsToInsert = insertedReqs.map((r) => ({
+        project_id: targetProjectId,
+        requirement_id: r.id,
+      }));
 
-        // Registrar versão inicial de importação
-        try {
-          await supabase.from("requirement_versions").insert({
-            requirement_id: newReq.id,
-            version_number: 1,
-            changed_by: user.id,
-            change_summary: `Requisito importado e reutilizado (Origem: ${original.code}).`,
-            snapshot: clonePayload,
-          });
-        } catch {}
-      }
+      try {
+        await supabase
+          .from("project_requirements")
+          .insert(projectReqsToInsert);
+      } catch {}
+
+      // 2. Registrar versão inicial de importação em lote
+      const versionsToInsert = insertedReqs.map((r) => {
+        const orig = codeToOriginalMap.get(r.code);
+        const payload = codeToPayloadMap.get(r.code);
+        return {
+          requirement_id: r.id,
+          version_number: 1,
+          changed_by: user.id,
+          change_summary: `Requisito importado e reutilizado (Origem: ${orig?.code || r.code}).`,
+          snapshot: payload,
+        };
+      });
+
+      try {
+        await supabase
+          .from("requirement_versions")
+          .insert(versionsToInsert);
+      } catch {}
     }
 
     revalidatePath("/requisitos");

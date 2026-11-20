@@ -647,113 +647,141 @@ export async function seedAllReqflowRequirementsAction({ projectId }) {
     let insertedCount = 0;
     let updatedCount = 0;
 
+    // 1. Buscar requisitos já existentes no projeto em UMA única consulta
+    const { data: existingRows } = await supabase
+      .from("requirements")
+      .select("id, code, current_version")
+      .eq("project_id", projectId);
+
+    const existingByCode = new Map();
+    (existingRows || []).forEach((row) => {
+      if (row.code) existingByCode.set(row.code.toUpperCase(), row);
+    });
+
+    const toInsert = [];
+    const toUpdate = [];
+
     for (const req of allRequirements) {
-      try {
-        // Verificar se já existe requisito com o mesmo código no projeto
-        const { data: existing } = await supabase
+      const codeKey = req.code?.toUpperCase();
+      const existing = existingByCode.get(codeKey);
+      if (existing) {
+        toUpdate.push({
+          id: existing.id,
+          project_id: projectId,
+          code: req.code,
+          title: req.title,
+          description: req.description,
+          type: req.type,
+          priority: req.priority,
+          status: req.status,
+          justification: req.justification,
+          source: req.source,
+          acceptance_criteria: req.acceptance_criteria,
+          responsible_id: responsibleId,
+          user_id: user.id,
+          ...(req.rejection_reason !== undefined ? { rejection_reason: req.rejection_reason } : {}),
+        });
+      } else {
+        toInsert.push(req);
+      }
+    }
+
+    // 2. Atualizar em lote requisitos existentes (upsert via chave primária id)
+    if (toUpdate.length > 0) {
+      let { error: updErr } = await supabase
+        .from("requirements")
+        .upsert(toUpdate, { onConflict: "id" });
+
+      if (updErr && updErr.message?.includes("rejection_reason")) {
+        const retryUpdates = toUpdate.map((p) => {
+          const copy = { ...p };
+          delete copy.rejection_reason;
+          return copy;
+        });
+        const retryUpdRes = await supabase
           .from("requirements")
-          .select("id, current_version")
-          .eq("project_id", projectId)
-          .eq("code", req.code)
-          .maybeSingle();
-
-        if (existing) {
-          // Atualiza os dados para o padrão completo
-          const updatePayload = {
-            title: req.title,
-            description: req.description,
-            type: req.type,
-            priority: req.priority,
-            status: req.status,
-            justification: req.justification,
-            source: req.source,
-            acceptance_criteria: req.acceptance_criteria,
-            responsible_id: responsibleId,
-            user_id: user.id,
-          };
-          if (req.rejection_reason !== undefined) {
-            updatePayload.rejection_reason = req.rejection_reason;
-          }
-
-          let { error: updErr } = await supabase
-            .from("requirements")
-            .update(updatePayload)
-            .eq("id", existing.id);
-
-          if (updErr && updErr.message?.includes("rejection_reason")) {
-            delete updatePayload.rejection_reason;
-            await supabase
-              .from("requirements")
-              .update(updatePayload)
-              .eq("id", existing.id);
-          }
-
-          updatedCount++;
-        } else {
-          // Insere novo requisito
-          const insertPayload = {
-            ...req,
-            project_id: projectId,
-            responsible_id: responsibleId,
-            created_by: user.id,
-            user_id: user.id,
-            current_version: 1,
-          };
-
-          let { data: createdReq, error: insErr } = await supabase
-            .from("requirements")
-            .insert(insertPayload)
-            .select("id")
-            .maybeSingle();
-
-          if (insErr && insErr.message?.includes("rejection_reason")) {
-            delete insertPayload.rejection_reason;
-            const retryRes = await supabase
-              .from("requirements")
-              .insert(insertPayload)
-              .select("id")
-              .maybeSingle();
-            createdReq = retryRes.data;
-            insErr = retryRes.error;
-          }
-
-          if (!insErr && createdReq) {
-            insertedCount++;
-
-            // Cria snapshot inicial da versão 1
-            try {
-              await supabase.from("requirement_versions").insert({
-                requirement_id: createdReq.id,
-                version_number: 1,
-                changed_by: user.id,
-                change_summary: "Versão inicial cadastrada no projeto ReqFlow",
-                snapshot: {
-                  code: req.code,
-                  title: req.title,
-                  description: req.description,
-                  type: req.type,
-                  priority: req.priority,
-                  status: req.status,
-                  justification: req.justification,
-                  source: req.source,
-                  acceptance_criteria: req.acceptance_criteria,
-                },
-              });
-            } catch {}
-
-            // Garante vínculo em project_requirements se a tabela existir
-            try {
-              await supabase
-                .from("project_requirements")
-                .upsert(
-                  { project_id: projectId, requirement_id: createdReq.id },
-                  { onConflict: "project_id,requirement_id" }
-                );
-            } catch {}
-          }
+          .upsert(retryUpdates, { onConflict: "id" });
+        if (!retryUpdRes.error) {
+          updatedCount = toUpdate.length;
         }
-      } catch (err) {
-        console.warn(`Aviso ao processar ${req.code}:`, err);
+      } else if (!updErr) {
+        updatedCount = toUpdate.length;
+      }
+    }
+
+    // 3. Inserir em lote novos requisitos
+    if (toInsert.length > 0) {
+      const insertPayloads = toInsert.map((req) => ({
+        ...req,
+        project_id: projectId,
+        responsible_id: responsibleId,
+        created_by: user.id,
+        user_id: user.id,
+        current_version: 1,
+      }));
+
+      let createdReqs = [];
+      let { data: insData, error: insErr } = await supabase
+        .from("requirements")
+        .insert(insertPayloads)
+        .select("id, code");
+
+      if (insErr && insErr.message?.includes("rejection_reason")) {
+        const retryPayloads = insertPayloads.map((p) => {
+          const copy = { ...p };
+          delete copy.rejection_reason;
+          return copy;
+        });
+        const retryRes = await supabase
+          .from("requirements")
+          .insert(retryPayloads)
+          .select("id, code");
+        createdReqs = retryRes.data || [];
+      } else if (!insErr && insData) {
+        createdReqs = insData;
+      }
+
+      if (createdReqs.length > 0) {
+        insertedCount = createdReqs.length;
+        const reqMap = new Map(toInsert.map((r) => [r.code.toUpperCase(), r]));
+
+        // Criar snapshots iniciais em lote
+        const versionsToInsert = createdReqs.map((cr) => {
+          const req = reqMap.get(cr.code.toUpperCase()) || {};
+          return {
+            requirement_id: cr.id,
+            version_number: 1,
+            changed_by: user.id,
+            change_summary: "Versão inicial cadastrada no projeto ReqFlow",
+            snapshot: {
+              code: req.code,
+              title: req.title,
+              description: req.description,
+              type: req.type,
+              priority: req.priority,
+              status: req.status,
+              justification: req.justification,
+              source: req.source,
+              acceptance_criteria: req.acceptance_criteria,
+            },
+          };
+        });
+
+        try {
+          await supabase.from("requirement_versions").insert(versionsToInsert);
+        } catch {}
+
+        // Vincular em lote em project_requirements
+        const linksToUpsert = createdReqs.map((cr) => ({
+          project_id: projectId,
+          requirement_id: cr.id,
+        }));
+
+        try {
+          await supabase
+            .from("project_requirements")
+            .upsert(linksToUpsert, { onConflict: "project_id,requirement_id" });
+        } catch {}
       }
     }
 

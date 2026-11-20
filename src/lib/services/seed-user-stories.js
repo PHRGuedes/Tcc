@@ -254,54 +254,61 @@ export async function ensureReqflowUserStoriesDirectly(supabase, userId, project
       }
     } catch {}
 
-    // 2. Inserir/Atualizar cada uma das 25 User Stories
+    // 2. Inserir/Atualizar em lote todas as 25 User Stories
     let insertedCount = 0;
-    for (const story of REQFLOW_OFFICIAL_USER_STORIES) {
-      try {
-        const { data: upsertedStory } = await supabase
-          .from("user_stories")
-          .upsert(
-            {
-              project_id: projectId,
-              code: story.code,
-              title: story.title,
-              as_a: story.as_a,
-              i_want: story.i_want,
-              so_that: story.so_that,
-              priority: story.priority,
-              status: "backlog",
-              responsible_id: userId,
-            },
-            { onConflict: "project_id,code" }
-          )
-          .select("id")
-          .maybeSingle();
+    const storiesToUpsert = REQFLOW_OFFICIAL_USER_STORIES.map((story) => ({
+      project_id: projectId,
+      code: story.code,
+      title: story.title,
+      as_a: story.as_a,
+      i_want: story.i_want,
+      so_that: story.so_that,
+      priority: story.priority,
+      status: "backlog",
+      responsible_id: userId,
+    }));
 
-        if (upsertedStory?.id) {
-          insertedCount++;
+    const { data: upsertedStories, error: storyErr } = await supabase
+      .from("user_stories")
+      .upsert(storiesToUpsert, { onConflict: "project_id,code" })
+      .select("id, code");
 
-          // 3. Vincular aos requisitos relacionados
-          const matchedReqIds = (story.related_reqs || [])
-            .map((c) => reqCodeToId[c.toUpperCase()])
-            .filter(Boolean);
+    if (storyErr) {
+      console.warn("Aviso ao realizar upsert em lote de user stories:", storyErr);
+    }
 
-          if (matchedReqIds.length > 0) {
-            const links = matchedReqIds.map((rId) => ({
-              requirement_id: rId,
-              user_story_id: upsertedStory.id,
-            }));
+    if (upsertedStories && upsertedStories.length > 0) {
+      insertedCount = upsertedStories.length;
+      const storyCodeToId = new Map(
+        upsertedStories.map((s) => [s.code?.toUpperCase(), s.id])
+      );
 
-            try {
-              await supabase
-                .from("requirement_user_stories")
-                .upsert(links, { onConflict: "requirement_id,user_story_id" });
-            } catch (linkErr) {
-              console.warn(`Aviso ao vincular links da story ${story.code}:`, linkErr);
-            }
-          }
+      // 3. Montar vínculos com requisitos em lote
+      const allLinks = [];
+      for (const story of REQFLOW_OFFICIAL_USER_STORIES) {
+        const storyId = storyCodeToId.get(story.code?.toUpperCase());
+        if (!storyId) continue;
+
+        const matchedReqIds = (story.related_reqs || [])
+          .map((c) => reqCodeToId[c.toUpperCase()])
+          .filter(Boolean);
+
+        for (const rId of matchedReqIds) {
+          allLinks.push({
+            requirement_id: rId,
+            user_story_id: storyId,
+          });
         }
-      } catch (stErr) {
-        console.warn(`Aviso ao inserir story ${story.code}:`, stErr);
+      }
+
+      if (allLinks.length > 0) {
+        try {
+          await supabase
+            .from("requirement_user_stories")
+            .upsert(allLinks, { onConflict: "requirement_id,user_story_id" });
+        } catch (linkErr) {
+          console.warn("Aviso ao vincular links de User Stories em lote:", linkErr);
+        }
       }
     }
 
