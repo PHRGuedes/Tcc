@@ -6,51 +6,51 @@ classDiagram
     %% ==========================================
     class RequirementType {
         <<enumeration>>
-        RF (Funcional)
-        RNF (Não Funcional)
+        RF
+        RNF
     }
 
     class Priority {
         <<enumeration>>
-        LOW (Baixa)
-        MEDIUM (Média)
-        HIGH (Alta)
-        CRITICAL (Crítica)
+        LOW
+        MEDIUM
+        HIGH
+        CRITICAL
     }
 
     class RequirementStatus {
         <<enumeration>>
-        PROPOSED (Proposto)
-        UNDER_REVIEW (Em Análise)
-        APPROVED (Aprovado)
-        NOT_APPROVED (Não Aprovado)
+        PROPOSED
+        UNDER_REVIEW
+        APPROVED
+        NOT_APPROVED
     }
 
     class StoryStatus {
         <<enumeration>>
-        BACKLOG (Product Backlog)
-        TODO (A Fazer)
-        IN_PROGRESS (Em Progresso)
-        DONE (Concluído)
+        BACKLOG
+        TODO
+        IN_PROGRESS
+        DONE
     }
 
     class SprintStatus {
         <<enumeration>>
-        PLANNED (Planejada)
-        ACTIVE (Em Andamento)
-        COMPLETED (Concluída)
+        PLANNED
+        ACTIVE
+        COMPLETED
     }
 
     class DependencyType {
         <<enumeration>>
-        CONFLICT (Conflita)
-        COMPLEMENTS (Complementa)
-        REFINES (Refina)
-        DEPENDS_ON (Depende de)
+        CONFLICT
+        COMPLEMENTS
+        REFINES
+        DEPENDS_ON
     }
 
     %% ==========================================
-    %% CLASSES DO NÚCLEO DO SISTEMA
+    %% ENTIDADES PRINCIPAIS
     %% ==========================================
 
     class Profile {
@@ -74,8 +74,8 @@ classDiagram
         +DateTime updated_at
         +adicionarMembro(userId, role)
         +removerMembro(userId)
-        +exportarDocumentoSRS() DocumentoSRS
-        +gerarMetricas() MetricasProjeto
+        +exportarDocumentoSRS()
+        +gerarMetricas()
     }
 
     class ProjectMember {
@@ -84,7 +84,7 @@ classDiagram
         +UUID user_id
         +String role_in_project
         +DateTime joined_at
-        +temPermissao(permissaoId) Boolean
+        +temPermissao(permissaoId)
     }
 
     class ProjectRole {
@@ -132,7 +132,7 @@ classDiagram
         +aprovar()
         +reprovar(motivo)
         +solicitarReavaliacao()
-        +criarNovaVersao(resumoModificacao)
+        +criarNovaVersao(resumo)
         +vincularUserStory(userStoryId)
         +adicionarDependencia(alvoId, tipo)
     }
@@ -146,7 +146,7 @@ classDiagram
         +JSON snapshot
         +DateTime created_at
         +restaurarVersao()
-        +compararCom(outraVersao) Diff
+        +compararCom(outraVersao)
     }
 
     class RequirementDependency {
@@ -155,7 +155,7 @@ classDiagram
         +UUID target_req_id
         +DependencyType dependency_type
         +DateTime created_at
-        +validarCicloDependencia() Boolean
+        +validarCicloDependencia()
     }
 
     class UserStory {
@@ -188,7 +188,7 @@ classDiagram
         +DateTime created_at
         +iniciarSprint()
         +concluirSprint()
-        +calcularVelocidade() Int
+        +calcularVelocidade()
     }
 
     class AuditLog {
@@ -208,32 +208,32 @@ classDiagram
     %% ==========================================
 
     %% Usuários e Projetos
-    Profile "1" --> "0..*" Project : "cria (owner)"
-    Project "1" *-- "1..*" ProjectMember : "possui equipe"
-    Profile "1" <-- "0..*" ProjectMember : "associa usuário"
-    Project "1" *-- "0..*" ProjectRole : "define papéis RBAC"
-    Project "1" *-- "0..*" ProjectInvitation : "emite convites"
-    Profile "1" <-- "0..*" ProjectInvitation : "destinado a"
+    Profile "1" --> "0..*" Project : cria
+    Project "1" *-- "1..*" ProjectMember : contem
+    ProjectMember "0..*" --> "1" Profile : usuario
+    Project "1" *-- "0..*" ProjectRole : define_papeis
+    Project "1" *-- "0..*" ProjectInvitation : emite
+    ProjectInvitation "0..*" --> "1" Profile : convidado
 
     %% Requisitos e Versionamento
-    Project "1" *-- "0..*" Requirement : "pertence a"
-    Profile "0..1" <-- "0..*" Requirement : "responsável"
-    Requirement "1" *-- "1..*" RequirementVersion : "mantém histórico"
-    Profile "0..1" <-- "0..*" RequirementVersion : "autor da alteração"
+    Project "1" *-- "0..*" Requirement : possui
+    Requirement "0..*" --> "0..1" Profile : responsavel
+    Requirement "1" *-- "1..*" RequirementVersion : versiona
+    RequirementVersion "0..*" --> "0..1" Profile : autor
 
     %% Dependências de Requisitos (Auto-relacionamento N:N)
-    Requirement "1" <-- "0..*" RequirementDependency : "origem"
-    Requirement "1" <-- "0..*" RequirementDependency : "alvo"
+    RequirementDependency "0..*" --> "1" Requirement : origem
+    RequirementDependency "0..*" --> "1" Requirement : alvo
 
     %% Rastreabilidade e Gestão Ágil
-    Project "1" *-- "0..*" Sprint : "planeja"
-    Project "1" *-- "0..*" UserStory : "armazena"
-    Sprint "0..1" o-- "0..*" UserStory : "aloca no Kanban"
-    Profile "0..1" <-- "0..*" UserStory : "atribuída a"
+    Project "1" *-- "0..*" Sprint : planeja
+    Project "1" *-- "0..*" UserStory : armazena
+    Sprint "0..1" o-- "0..*" UserStory : aloca
+    UserStory "0..*" --> "0..1" Profile : responsavel
 
     %% Matriz de Rastreabilidade Bidirecional (N:N Requisito <-> User Story)
-    Requirement "0..*" -- "0..*" UserStory : "rastreabilidade (N:N)"
+    Requirement "0..*" -- "0..*" UserStory : rastreia
 
     %% Auditoria Geral
-    Project "1" *-- "0..*" AuditLog : "registra trilha"
-    Profile "0..1" <-- "0..*" AuditLog : "agente da ação"
+    Project "1" *-- "0..*" AuditLog : registra
+    AuditLog "0..*" --> "0..1" Profile : autor
