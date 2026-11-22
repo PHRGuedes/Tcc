@@ -96,7 +96,7 @@ export default function DashboardPage() {
                 .select("id, action, description, created_at, profiles(full_name, avatar_url)")
                 .eq("project_id", activeProject.id)
                 .order("created_at", { ascending: false })
-                .limit(5);
+                .limit(100);
               return data || [];
             } catch {
               return [];
@@ -142,16 +142,28 @@ export default function DashboardPage() {
 
         if (logs && logs.length > 0) {
           setActivities(
-            logs.map((log) => ({
-              id: log.id,
-              user_name: log.profiles?.full_name || "Membro da Equipe",
-              avatar_url: log.profiles?.avatar_url || null,
-              text: log.description,
-              time: new Date(log.created_at).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-            }))
+            logs.map((log) => {
+              const logDate = new Date(log.created_at);
+              const isToday =
+                logDate.toLocaleDateString() === new Date().toLocaleDateString();
+              const formattedTime = isToday
+                ? logDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : `${logDate.toLocaleDateString("pt-BR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                  })} às ${logDate.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}`;
+
+              return {
+                id: log.id,
+                user_name: log.profiles?.full_name || "Membro da Equipe",
+                avatar_url: log.profiles?.avatar_url || null,
+                text: log.description,
+                time: formattedTime,
+              };
+            })
           );
         } else {
           setActivities([]);
