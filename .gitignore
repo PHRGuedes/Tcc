@@ -43,4 +43,9 @@ supabase/.temp/
 *.tsbuildinfo
 next-env.d.ts
 
+# docs and diagrams
+/docs/
+*.mmd
+
 .agents
+
