@@ -288,6 +288,10 @@ export default function UserStoriesPage() {
 
     setIsSaving(true);
     try {
+      const finalStatus = storyForm.sprint_id
+        ? (storyForm.status === "backlog" ? "todo" : storyForm.status || "todo")
+        : "backlog";
+
       let res;
       if (editingStory) {
         res = await updateUserStoryAction(editingStory.id, {
@@ -298,7 +302,7 @@ export default function UserStoriesPage() {
           i_want: storyForm.i_want,
           so_that: storyForm.so_that,
           priority: storyForm.priority,
-          status: storyForm.status,
+          status: finalStatus,
           sprintId: storyForm.sprint_id || null,
           requirementIds: storyForm.requirementIds,
         });
@@ -311,7 +315,7 @@ export default function UserStoriesPage() {
           i_want: storyForm.i_want,
           so_that: storyForm.so_that,
           priority: storyForm.priority,
-          status: storyForm.status,
+          status: finalStatus,
           sprintId: storyForm.sprint_id || null,
           requirementIds: storyForm.requirementIds,
         });
@@ -686,38 +690,6 @@ export default function UserStoriesPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
-                    Status no Kanban
-                  </label>
-                  <select
-                    value={storyForm.status}
-                    onChange={(e) => setStoryForm({ ...storyForm, status: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-950 focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  >
-                    <option value="backlog">Product Backlog</option>
-                    <option value="todo">A Fazer</option>
-                    <option value="in_progress">Em Progresso</option>
-                    <option value="done">Concluído</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
-                    Título da História
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Autenticação Segura de Usuários"
-                    value={storyForm.title}
-                    onChange={(e) => setStoryForm({ ...storyForm, title: e.target.value })}
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
                     Sprint de Execução
                   </label>
                   <select
@@ -745,6 +717,20 @@ export default function UserStoriesPage() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider">
+                  Título da História
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Autenticação Segura de Usuários"
+                  value={storyForm.title}
+                  onChange={(e) => setStoryForm({ ...storyForm, title: e.target.value })}
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div>
