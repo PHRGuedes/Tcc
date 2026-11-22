@@ -1,0 +1,239 @@
+classDiagram
+    direction TB
+
+    %% ==========================================
+    %% ENUMERAÇÕES DO DOMÍNIO
+    %% ==========================================
+    class RequirementType {
+        <<enumeration>>
+        RF (Funcional)
+        RNF (Não Funcional)
+    }
+
+    class Priority {
+        <<enumeration>>
+        LOW (Baixa)
+        MEDIUM (Média)
+        HIGH (Alta)
+        CRITICAL (Crítica)
+    }
+
+    class RequirementStatus {
+        <<enumeration>>
+        PROPOSED (Proposto)
+        UNDER_REVIEW (Em Análise)
+        APPROVED (Aprovado)
+        NOT_APPROVED (Não Aprovado)
+    }
+
+    class StoryStatus {
+        <<enumeration>>
+        BACKLOG (Product Backlog)
+        TODO (A Fazer)
+        IN_PROGRESS (Em Progresso)
+        DONE (Concluído)
+    }
+
+    class SprintStatus {
+        <<enumeration>>
+        PLANNED (Planejada)
+        ACTIVE (Em Andamento)
+        COMPLETED (Concluída)
+    }
+
+    class DependencyType {
+        <<enumeration>>
+        CONFLICT (Conflita)
+        COMPLEMENTS (Complementa)
+        REFINES (Refina)
+        DEPENDS_ON (Depende de)
+    }
+
+    %% ==========================================
+    %% CLASSES DO NÚCLEO DO SISTEMA
+    %% ==========================================
+
+    class Profile {
+        +UUID id
+        +String full_name
+        +String email
+        +String avatar_url
+        +String system_role
+        +DateTime created_at
+        +DateTime updated_at
+        +atualizarPerfil()
+        +autenticar()
+    }
+
+    class Project {
+        +UUID id
+        +String name
+        +String description
+        +UUID created_by
+        +DateTime created_at
+        +DateTime updated_at
+        +adicionarMembro(userId, role)
+        +removerMembro(userId)
+        +exportarDocumentoSRS() DocumentoSRS
+        +gerarMetricas() MetricasProjeto
+    }
+
+    class ProjectMember {
+        +UUID id
+        +UUID project_id
+        +UUID user_id
+        +String role_in_project
+        +DateTime joined_at
+        +temPermissao(permissaoId) Boolean
+    }
+
+    class ProjectRole {
+        +UUID id
+        +UUID project_id
+        +String name
+        +String slug
+        +String description
+        +Boolean is_system
+        +JSON permissions
+        +adicionarPermissao(chave)
+        +revogarPermissao(chave)
+    }
+
+    class ProjectInvitation {
+        +UUID id
+        +UUID project_id
+        +UUID invited_user_id
+        +UUID invited_by
+        +String role_in_project
+        +String status
+        +DateTime created_at
+        +aceitar()
+        +recusar()
+    }
+
+    class Requirement {
+        +UUID id
+        +String code
+        +String title
+        +String description
+        +RequirementType type
+        +Priority priority
+        +RequirementStatus status
+        +String justification
+        +String source
+        +String acceptance_criteria
+        +String rejection_reason
+        +Boolean is_incomplete
+        +Int current_version
+        +UUID project_id
+        +UUID responsible_id
+        +DateTime created_at
+        +DateTime updated_at
+        +aprovar()
+        +reprovar(motivo)
+        +solicitarReavaliacao()
+        +criarNovaVersao(resumoModificacao)
+        +vincularUserStory(userStoryId)
+        +adicionarDependencia(alvoId, tipo)
+    }
+
+    class RequirementVersion {
+        +UUID id
+        +UUID requirement_id
+        +Int version_number
+        +UUID changed_by
+        +String change_summary
+        +JSON snapshot
+        +DateTime created_at
+        +restaurarVersao()
+        +compararCom(outraVersao) Diff
+    }
+
+    class RequirementDependency {
+        +UUID id
+        +UUID source_req_id
+        +UUID target_req_id
+        +DependencyType dependency_type
+        +DateTime created_at
+        +validarCicloDependencia() Boolean
+    }
+
+    class UserStory {
+        +UUID id
+        +UUID project_id
+        +String code
+        +String title
+        +String as_a
+        +String i_want
+        +String so_that
+        +StoryStatus status
+        +Priority priority
+        +UUID sprint_id
+        +UUID responsible_id
+        +DateTime created_at
+        +DateTime updated_at
+        +atribuirSprint(sprintId)
+        +desvincularParaBacklog()
+        +atualizarStatusKanban(novoStatus)
+    }
+
+    class Sprint {
+        +UUID id
+        +UUID project_id
+        +String name
+        +String goal
+        +Date start_date
+        +Date end_date
+        +SprintStatus status
+        +DateTime created_at
+        +iniciarSprint()
+        +concluirSprint()
+        +calcularVelocidade() Int
+    }
+
+    class AuditLog {
+        +UUID id
+        +UUID project_id
+        +UUID user_id
+        +String entity_type
+        +String entity_id
+        +String action
+        +String description
+        +JSON details
+        +DateTime created_at
+    }
+
+    %% ==========================================
+    %% RELACIONAMENTOS E CARDINALIDADES
+    %% ==========================================
+
+    %% Usuários e Projetos
+    Profile "1" --> "0..*" Project : "cria (owner)"
+    Project "1" *-- "1..*" ProjectMember : "possui equipe"
+    Profile "1" <-- "0..*" ProjectMember : "associa usuário"
+    Project "1" *-- "0..*" ProjectRole : "define papéis RBAC"
+    Project "1" *-- "0..*" ProjectInvitation : "emite convites"
+    Profile "1" <-- "0..*" ProjectInvitation : "destinado a"
+
+    %% Requisitos e Versionamento
+    Project "1" *-- "0..*" Requirement : "pertence a"
+    Profile "0..1" <-- "0..*" Requirement : "responsável"
+    Requirement "1" *-- "1..*" RequirementVersion : "mantém histórico"
+    Profile "0..1" <-- "0..*" RequirementVersion : "autor da alteração"
+
+    %% Dependências de Requisitos (Auto-relacionamento N:N)
+    Requirement "1" <-- "0..*" RequirementDependency : "origem"
+    Requirement "1" <-- "0..*" RequirementDependency : "alvo"
+
+    %% Rastreabilidade e Gestão Ágil
+    Project "1" *-- "0..*" Sprint : "planeja"
+    Project "1" *-- "0..*" UserStory : "armazena"
+    Sprint "0..1" o-- "0..*" UserStory : "aloca no Kanban"
+    Profile "0..1" <-- "0..*" UserStory : "atribuída a"
+
+    %% Matriz de Rastreabilidade Bidirecional (N:N Requisito <-> User Story)
+    Requirement "0..*" -- "0..*" UserStory : "rastreabilidade (N:N)"
+
+    %% Auditoria Geral
+    Project "1" *-- "0..*" AuditLog : "registra trilha"
+    Profile "0..1" <-- "0..*" AuditLog : "agente da ação"
