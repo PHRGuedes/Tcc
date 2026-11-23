@@ -17,21 +17,21 @@ const OFFICIAL_US_TO_REQS_MAP = {
   "US-06": ["RF-10", "RF-11", "RF-12"],
   "US-07": ["RF-13", "RF-14", "RF-15", "RF-18"],
   "US-08": ["RF-16", "RF-17"],
-  "US-09": ["RF-26"],
-  "US-10": ["RF-19", "RF-20"],
-  "US-11": ["RF-21"],
-  "US-12": ["RF-22", "RF-23"],
-  "US-13": ["RF-24", "RF-25"],
-  "US-14": ["RF-27", "RF-28"],
-  "US-15": ["RF-29", "RF-30"],
-  "US-16": ["RF-31"],
-  "US-17": ["RF-32"],
-  "US-18": ["RF-33", "RF-34"],
-  "US-19": ["RF-35"],
-  "US-20": ["RF-36"],
+  "US-09": ["RF-25"],
+  "US-10": ["RF-19"],
+  "US-11": ["RF-20"],
+  "US-12": ["RF-21", "RF-22"],
+  "US-13": ["RF-23", "RF-24"],
+  "US-14": ["RF-26", "RF-27"],
+  "US-15": ["RF-28"],
+  "US-16": ["RF-29"],
+  "US-17": ["RF-30", "RF-31"],
+  "US-18": ["RF-32"],
+  "US-19": ["RF-33", "RF-34"],
+  "US-20": ["RF-35", "RF-36"],
   "US-21": ["RF-37"],
-  "US-22": ["RF-38", "RF-39"],
-  "US-23": ["RF-40"],
+  "US-22": ["RF-38"],
+  "US-23": ["RF-39", "RF-40"],
   "US-24": ["RF-41"],
   "US-25": ["RF-42", "RF-43"],
 };
@@ -100,7 +100,7 @@ export async function generateProjectReportPDF({
   const reqToStoriesMap = {};
   const storyToReqsMap = {};
 
-  // 1. Usar vínculos reais do banco (se houver)
+  // 1. Usar vínculos reais do banco de dados (prioridade absoluta)
   (traceabilityLinks || []).forEach((link) => {
     const rCode = reqIdToCode[link.requirement_id];
     const sCode = storyIdToCode[link.user_story_id];
@@ -113,15 +113,18 @@ export async function generateProjectReportPDF({
     }
   });
 
-  // 2. Mesclar com mapeamento oficial como garantia de completude
-  Object.entries(OFFICIAL_US_TO_REQS_MAP).forEach(([sCode, reqList]) => {
-    if (!storyToReqsMap[sCode]) storyToReqsMap[sCode] = new Set();
-    reqList.forEach((rCode) => {
-      storyToReqsMap[sCode].add(rCode);
-      if (!reqToStoriesMap[rCode]) reqToStoriesMap[rCode] = new Set();
-      reqToStoriesMap[rCode].add(sCode);
+  // 2. Apenas se o projeto NÃO possuir nenhum vínculo cadastrado, usar o mapeamento padrão como fallback
+  const hasRealLinks = Object.keys(reqToStoriesMap).length > 0;
+  if (!hasRealLinks) {
+    Object.entries(OFFICIAL_US_TO_REQS_MAP).forEach(([sCode, reqList]) => {
+      if (!storyToReqsMap[sCode]) storyToReqsMap[sCode] = new Set();
+      reqList.forEach((rCode) => {
+        storyToReqsMap[sCode].add(rCode);
+        if (!reqToStoriesMap[rCode]) reqToStoriesMap[rCode] = new Set();
+        reqToStoriesMap[rCode].add(sCode);
+      });
     });
-  });
+  }
 
   // =========================================================================
   // 1. HEADER BANNER DA CAPA (NAVY BLUE REQFLOW - RESPIRO E ESPAÇAMENTO PERFEITO)

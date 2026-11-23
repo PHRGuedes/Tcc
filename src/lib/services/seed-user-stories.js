@@ -84,7 +84,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero gerenciar stakeholders do projeto",
     so_that: "para que eu possa relacioná-los aos requisitos e às decisões tomadas ao longo do desenvolvimento.",
     priority: "medium",
-    related_reqs: ["RF-26"],
+    related_reqs: ["RF-25"],
   },
   {
     code: "US-10",
@@ -93,7 +93,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero refinar requisitos antes de sua aprovação final e registrar dependências entre eles",
     so_that: "para que inconsistências e conflitos sejam identificados e resolvidos antes da implementação.",
     priority: "high",
-    related_reqs: ["RF-19", "RF-20"],
+    related_reqs: ["RF-19"],
   },
   {
     code: "US-11",
@@ -102,7 +102,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero realizar análise de impacto quando um requisito for alterado",
     so_that: "para que eu possa identificar quais outros requisitos e artefatos serão afetados pela mudança.",
     priority: "high",
-    related_reqs: ["RF-21"],
+    related_reqs: ["RF-20"],
   },
   {
     code: "US-12",
@@ -111,7 +111,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero manter histórico de alterações e controlar versões dos requisitos",
     so_that: "para que eu possa acompanhar sua evolução e recuperar informações anteriores quando necessário.",
     priority: "high",
-    related_reqs: ["RF-22", "RF-23"],
+    related_reqs: ["RF-21", "RF-22"],
   },
   {
     code: "US-13",
@@ -120,7 +120,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero registrar decisões, comentários e validações vinculados aos requisitos",
     so_that: "para que o conhecimento gerado nas reuniões e revisões fique documentado e acessível.",
     priority: "medium",
-    related_reqs: ["RF-24", "RF-25"],
+    related_reqs: ["RF-23", "RF-24"],
   },
   {
     code: "US-14",
@@ -129,7 +129,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero organizar requisitos e histórias de usuário em um backlog priorizado e associá-los a sprints",
     so_that: "para que o planejamento das iterações de desenvolvimento seja claro e estruturado.",
     priority: "high",
-    related_reqs: ["RF-27", "RF-28"],
+    related_reqs: ["RF-26", "RF-27"],
   },
   {
     code: "US-15",
@@ -138,7 +138,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero cadastrar casos de uso e vinculá-los aos requisitos funcionais correspondentes",
     so_that: "para que as interações entre atores e sistema sejam detalhadas e rastreáveis.",
     priority: "medium",
-    related_reqs: ["RF-29", "RF-30"],
+    related_reqs: ["RF-28"],
   },
   {
     code: "US-16",
@@ -147,7 +147,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero gerar uma matriz de rastreabilidade",
     so_that: "para que eu possa visualizar as relações entre requisitos, stakeholders, casos de uso e histórias de usuário.",
     priority: "high",
-    related_reqs: ["RF-31"],
+    related_reqs: ["RF-29"],
   },
   {
     code: "US-17",
@@ -156,7 +156,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero consultar e filtrar requisitos por diferentes critérios",
     so_that: "para que eu possa localizar informações específicas com rapidez e facilidade.",
     priority: "high",
-    related_reqs: ["RF-32"],
+    related_reqs: ["RF-30", "RF-31"],
   },
   {
     code: "US-18",
@@ -165,7 +165,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero reutilizar requisitos de outros projetos e acessar uma biblioteca de requisitos genéricos",
     so_that: "para que o tempo de especificação de novos projetos seja reduzido.",
     priority: "medium",
-    related_reqs: ["RF-33", "RF-34"],
+    related_reqs: ["RF-32"],
   },
   {
     code: "US-19",
@@ -174,7 +174,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero anexar documentos, imagens e arquivos aos requisitos",
     so_that: "para que a especificação seja complementada com evidências e materiais de apoio.",
     priority: "low",
-    related_reqs: ["RF-35"],
+    related_reqs: ["RF-33", "RF-34"],
   },
   {
     code: "US-20",
@@ -183,7 +183,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero ser alertado quando um requisito estiver incompleto",
     so_that: "para que lacunas sejam corrigidas antes da aprovação.",
     priority: "high",
-    related_reqs: ["RF-36"],
+    related_reqs: ["RF-35", "RF-36"],
   },
   {
     code: "US-21",
@@ -201,7 +201,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero visualizar um dashboard com indicadores e gerar relatórios sobre os requisitos",
     so_that: "para que o acompanhamento do progresso do projeto seja feito de forma rápida e visual.",
     priority: "medium",
-    related_reqs: ["RF-38", "RF-39"],
+    related_reqs: ["RF-38"],
   },
   {
     code: "US-23",
@@ -210,7 +210,7 @@ export const REQFLOW_OFFICIAL_USER_STORIES = [
     i_want: "eu quero receber notificações sobre alterações, comentários e aprovações",
     so_that: "para que eu seja informado de mudanças importantes sem precisar verificar manualmente.",
     priority: "medium",
-    related_reqs: ["RF-40"],
+    related_reqs: ["RF-39", "RF-40"],
   },
   {
     code: "US-24",
