@@ -18,6 +18,7 @@ import {
   Mail,
   UserMinus,
   Menu,
+  Archive,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSidebar } from "@/components/layout/sidebar-context";
@@ -222,6 +223,12 @@ export function Topbar({ title = "Dashboard" }) {
                     {activeProject?.name || "Nenhum projeto selecionado"}
                   </strong>
                 </span>
+                {activeProject?.is_archived && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                    <Archive className="w-2.5 h-2.5" />
+                    Arquivado
+                  </span>
+                )}
                 <ChevronDown className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
               </button>
 
@@ -231,8 +238,9 @@ export function Topbar({ title = "Dashboard" }) {
                 <div className="px-3 py-1.5 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                   Alternar Projeto
                 </div>
-                <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                  {projects.map((proj) => (
+                <div className="space-y-0.5 max-h-56 overflow-y-auto">
+                  {/* Projetos Ativos */}
+                  {projects.filter((p) => !p.is_archived).map((proj) => (
                     <button
                       key={proj.id}
                       onClick={() => {
@@ -245,10 +253,42 @@ export function Topbar({ title = "Dashboard" }) {
                           : "text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/70"
                       }`}
                     >
-                      <FolderKanban className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                      <FolderKanban className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
                       <span className="truncate">{proj.name}</span>
                     </button>
                   ))}
+
+                  {/* Projetos Arquivados */}
+                  {projects.filter((p) => p.is_archived).length > 0 && (
+                    <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800/80">
+                      <div className="px-3 py-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                        <Archive className="w-3 h-3 text-amber-500" />
+                        <span>Arquivados ({projects.filter((p) => p.is_archived).length})</span>
+                      </div>
+                      {projects.filter((p) => p.is_archived).map((proj) => (
+                        <button
+                          key={proj.id}
+                          onClick={() => {
+                            setActiveProject(proj);
+                            setShowProjectMenu(false);
+                          }}
+                          className={`w-full text-left px-3 py-1.5 rounded-lg text-xs font-medium flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                            activeProject?.id === proj.id
+                              ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-semibold"
+                              : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/70"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <Archive className="w-3.5 h-3.5 text-amber-500/70 shrink-0" />
+                            <span className="truncate">{proj.name}</span>
+                          </div>
+                          <span className="text-[10px] px-1 py-0.2 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-medium shrink-0">
+                            Arquivado
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="border-t border-slate-100 dark:border-slate-800 mt-2 pt-2 space-y-1">
                   {isProjectAdmin && (

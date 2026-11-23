@@ -27,6 +27,8 @@ import {
   Save,
   CheckSquare,
   Square,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { useProject } from "@/components/layout/project-context";
 import { useAuth } from "@/hooks/use-auth";
@@ -98,11 +100,12 @@ export const ALLOWED_PROJECT_ROLES = [
 
 export function ManageProjectModal({ isOpen, onClose }) {
   const { user } = useAuth();
-  const { activeProject, updateProject, deleteProject } = useProject();
+  const { activeProject, updateProject, deleteProject, archiveProject, unarchiveProject } = useProject();
 
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("general"); // "general" | "stakeholders"
   const [isDeletingProject, setIsDeletingProject] = useState(false);
+  const [isArchivingProject, setIsArchivingProject] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -270,6 +273,48 @@ export function ManageProjectModal({ isOpen, onClose }) {
       navigator.clipboard.writeText(activeProject.id);
       setCopiedId(true);
       setTimeout(() => setCopiedId(false), 2000);
+    }
+  };
+
+  // Handler para arquivar projeto
+  const handleArchiveProject = async () => {
+    if (!activeProject?.id || !isCurrentUserAdmin) return;
+    const confirmed = window.confirm(
+      `Deseja realmente arquivar o projeto "${activeProject.name}"? Ele será ocultado da lista ativa, mas todos os requisitos, histórias e dados continuarão preservados integralmente.`
+    );
+    if (!confirmed) return;
+
+    setIsArchivingProject(true);
+    setGeneralError("");
+
+    try {
+      await archiveProject(activeProject.id);
+      setGeneralSuccess(true);
+      setTimeout(() => setGeneralSuccess(false), 3000);
+    } catch (err) {
+      console.error("Erro ao arquivar projeto:", err);
+      setGeneralError(err.message || "Não foi possível arquivar o projeto.");
+    } finally {
+      setIsArchivingProject(false);
+    }
+  };
+
+  // Handler para desarquivar/restaurar projeto
+  const handleUnarchiveProject = async () => {
+    if (!activeProject?.id || !isCurrentUserAdmin) return;
+
+    setIsArchivingProject(true);
+    setGeneralError("");
+
+    try {
+      await unarchiveProject(activeProject.id);
+      setGeneralSuccess(true);
+      setTimeout(() => setGeneralSuccess(false), 3000);
+    } catch (err) {
+      console.error("Erro ao desarquivar projeto:", err);
+      setGeneralError(err.message || "Não foi possível desarquivar o projeto.");
+    } finally {
+      setIsArchivingProject(false);
     }
   };
 
@@ -556,11 +601,17 @@ export function ManageProjectModal({ isOpen, onClose }) {
         {/* Header do Modal */}
         <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-[#0f172a]">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Gerenciar Projeto</h2>
               <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                 {activeProject?.name || "Projeto"}
               </span>
+              {activeProject?.is_archived && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-[11px] font-bold text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                  <Archive className="w-3 h-3" />
+                  Arquivado
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Configure as informações gerais, controle os stakeholders e personalize as permissões deste projeto.
@@ -698,6 +749,76 @@ export function ManageProjectModal({ isOpen, onClose }) {
                   </div>
                 </div>
               </div>
+
+              {/* Arquivamento do Projeto (Apenas Administrador / Criador) */}
+              {isCurrentUserAdmin && (
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                  <div
+                    className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      activeProject?.is_archived
+                        ? "border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/40 dark:bg-emerald-950/20"
+                        : "border-amber-200 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20"
+                    }`}
+                  >
+                    <div>
+                      <p
+                        className={`text-xs font-bold flex items-center gap-1.5 ${
+                          activeProject?.is_archived
+                            ? "text-emerald-800 dark:text-emerald-300"
+                            : "text-amber-800 dark:text-amber-300"
+                        }`}
+                      >
+                        {activeProject?.is_archived ? (
+                          <>
+                            <ArchiveRestore className="w-3.5 h-3.5" />
+                            <span>Projeto Arquivado</span>
+                          </>
+                        ) : (
+                          <>
+                            <Archive className="w-3.5 h-3.5" />
+                            <span>Arquivar Projeto</span>
+                          </>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                        {activeProject?.is_archived
+                          ? "Este projeto está arquivado. Você pode desarquivá-lo para reativá-lo na lista de projetos ativos a qualquer momento."
+                          : "Oculta o projeto da lista principal sem apagar dados. Requisitos, histórias e métricas continuam seguros."}
+                      </p>
+                    </div>
+
+                    {activeProject?.is_archived ? (
+                      <button
+                        type="button"
+                        disabled={isArchivingProject}
+                        onClick={handleUnarchiveProject}
+                        className="px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors disabled:opacity-60 shrink-0 cursor-pointer"
+                      >
+                        {isArchivingProject ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <ArchiveRestore className="w-3.5 h-3.5" />
+                        )}
+                        <span>Desarquivar Projeto</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isArchivingProject}
+                        onClick={handleArchiveProject}
+                        className="px-3.5 py-2 text-xs font-semibold text-amber-950 dark:text-amber-100 bg-amber-400 hover:bg-amber-500 dark:bg-amber-600 dark:hover:bg-amber-500 rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors disabled:opacity-60 shrink-0 cursor-pointer"
+                      >
+                        {isArchivingProject ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Archive className="w-3.5 h-3.5" />
+                        )}
+                        <span>Arquivar Projeto</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Zona de Perigo (Apenas Administrador / Criador) */}
               {isCurrentUserAdmin && (

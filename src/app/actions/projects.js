@@ -268,6 +268,153 @@ export async function deleteProjectAction(projectId) {
 }
 
 /**
+ * Server Action para arquivar um projeto (apenas Administrador ou Criador)
+ */
+export async function archiveProjectAction(projectId) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    if (!projectId) {
+      return { success: false, error: "ID do projeto não informado." };
+    }
+
+    const isAdmin = await checkIsProjectAdmin(supabase, projectId, user.id);
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: "Apenas o administrador ou criador do projeto pode arquivá-lo.",
+      };
+    }
+
+    // Tentar atualizar com is_archived e archived_at
+    const { data: updatedProject, error: updateError } = await supabase
+      .from("projects")
+      .update({
+        is_archived: true,
+        archived_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", projectId)
+      .select("id, name, description, created_by, is_archived, archived_at, created_at, updated_at")
+      .single();
+
+    if (updateError) {
+      console.error("Erro ao arquivar projeto no Supabase:", updateError);
+      return {
+        success: false,
+        error: updateError.message?.includes("is_archived")
+          ? "A coluna is_archived ainda não existe no banco. Execute a migration 0013 no painel do Supabase."
+          : updateError.message,
+      };
+    }
+
+    // Registrar no audit_logs
+    try {
+      await supabase.from("audit_logs").insert({
+        project_id: projectId,
+        user_id: user.id,
+        entity_type: "project",
+        entity_id: projectId,
+        action: "archived",
+        description: `arquivou o projeto "${updatedProject.name}"`,
+      });
+    } catch (auditErr) {
+      console.warn("Aviso ao registrar log de auditoria ao arquivar:", auditErr);
+    }
+
+    revalidatePath("/", "layout");
+    return { success: true, data: updatedProject };
+  } catch (err) {
+    console.error("Exceção em archiveProjectAction:", err);
+    return {
+      success: false,
+      error: "Ocorreu um erro interno no servidor ao arquivar o projeto.",
+    };
+  }
+}
+
+/**
+ * Server Action para desarquivar/restaurar um projeto (apenas Administrador ou Criador)
+ */
+export async function unarchiveProjectAction(projectId) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Usuário não autenticado." };
+    }
+
+    if (!projectId) {
+      return { success: false, error: "ID do projeto não informado." };
+    }
+
+    const isAdmin = await checkIsProjectAdmin(supabase, projectId, user.id);
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: "Apenas o administrador ou criador do projeto pode desarquivá-lo.",
+      };
+    }
+
+    const { data: updatedProject, error: updateError } = await supabase
+      .from("projects")
+      .update({
+        is_archived: false,
+        archived_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", projectId)
+      .select("id, name, description, created_by, is_archived, archived_at, created_at, updated_at")
+      .single();
+
+    if (updateError) {
+      console.error("Erro ao desarquivar projeto no Supabase:", updateError);
+      return {
+        success: false,
+        error: updateError.message?.includes("is_archived")
+          ? "A coluna is_archived ainda não existe no banco. Execute a migration 0013 no painel do Supabase."
+          : updateError.message,
+      };
+    }
+
+    // Registrar no audit_logs
+    try {
+      await supabase.from("audit_logs").insert({
+        project_id: projectId,
+        user_id: user.id,
+        entity_type: "project",
+        entity_id: projectId,
+        action: "unarchived",
+        description: `desarquivou e restaurou o projeto "${updatedProject.name}"`,
+      });
+    } catch (auditErr) {
+      console.warn("Aviso ao registrar log de auditoria ao desarquivar:", auditErr);
+    }
+
+    revalidatePath("/", "layout");
+    return { success: true, data: updatedProject };
+  } catch (err) {
+    console.error("Exceção em unarchiveProjectAction:", err);
+    return {
+      success: false,
+      error: "Ocorreu um erro interno no servidor ao desarquivar o projeto.",
+    };
+  }
+}
+
+/**
  * Server Action para listar stakeholders (membros) vinculados ao projeto.
  * Garante que o criador do projeto (created_by) esteja automaticamente cadastrado como 'admin'.
  */

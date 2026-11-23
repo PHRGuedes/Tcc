@@ -13,6 +13,8 @@ import {
   createProjectAction,
   updateProjectAction,
   deleteProjectAction,
+  archiveProjectAction,
+  unarchiveProjectAction,
 } from "@/app/actions/projects";
 
 const STORAGE_KEY = "reqflow_active_project_id";
@@ -26,6 +28,8 @@ const ProjectContext = createContext({
   createProject: async () => { },
   updateProject: async () => { },
   deleteProject: async () => { },
+  archiveProject: async () => { },
+  unarchiveProject: async () => { },
 });
 
 export function ProjectProvider({ children }) {
@@ -47,25 +51,46 @@ export function ProjectProvider({ children }) {
 
   const fetchProjects = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      // 1. Tentar buscar incluindo as colunas is_archived e archived_at
+      let { data, error } = await supabase
         .from("projects")
-        .select("id, name, description, created_by, created_at, updated_at")
+        .select("id, name, description, created_by, is_archived, archived_at, created_at, updated_at")
         .order("created_at", { ascending: false });
+
+      // Fallback gracioso caso a coluna is_archived ainda não tenha sido criada no banco
+      if (error && error.message?.includes("is_archived")) {
+        const fallbackRes = await supabase
+          .from("projects")
+          .select("id, name, description, created_by, created_at, updated_at")
+          .order("created_at", { ascending: false });
+        data = (fallbackRes.data || []).map((p) => ({
+          ...p,
+          is_archived: false,
+          archived_at: null,
+        }));
+        error = fallbackRes.error;
+      }
 
       if (error) {
         console.warn("Aviso ao carregar projetos do Supabase:", error.message);
         setProjects([]);
         setActiveProject(null);
       } else if (data && data.length > 0) {
-        setProjects(data);
+        const normalized = data.map((p) => ({
+          ...p,
+          is_archived: Boolean(p.is_archived),
+        }));
+        setProjects(normalized);
 
         // Restaurar projeto previamente ativo do localStorage
         const savedId =
           typeof window !== "undefined"
             ? localStorage.getItem(STORAGE_KEY)
             : null;
-        const matched = data.find((p) => p.id === savedId);
-        setActiveProject(matched || data[0]);
+        const matched = normalized.find((p) => p.id === savedId);
+        // Priorizar projeto salvo ou projeto ativo não-arquivado
+        const fallbackProject = normalized.find((p) => !p.is_archived) || normalized[0];
+        setActiveProject(matched || fallbackProject);
       } else {
         // Usuário novo ou sem projetos cadastrados: lista zerada
         setProjects([]);
@@ -154,6 +179,67 @@ export function ProjectProvider({ children }) {
     return true;
   };
 
+  // Função para arquivar projeto do Supabase via Server Action
+  const archiveProject = async (projectId) => {
+    const result = await archiveProjectAction(projectId);
+    if (!result.success) {
+      throw new Error(result.error || "Não foi possível arquivar o projeto.");
+    }
+
+    const updated = result.data;
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              is_archived: true,
+              archived_at: updated?.archived_at || new Date().toISOString(),
+            }
+          : p
+      )
+    );
+
+    if (activeProject?.id === projectId) {
+      setActiveProject((prev) => ({
+        ...prev,
+        is_archived: true,
+        archived_at: updated?.archived_at || new Date().toISOString(),
+      }));
+    }
+
+    return true;
+  };
+
+  // Função para desarquivar/restaurar projeto do Supabase via Server Action
+  const unarchiveProject = async (projectId) => {
+    const result = await unarchiveProjectAction(projectId);
+    if (!result.success) {
+      throw new Error(result.error || "Não foi possível desarquivar o projeto.");
+    }
+
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? {
+              ...p,
+              is_archived: false,
+              archived_at: null,
+            }
+          : p
+      )
+    );
+
+    if (activeProject?.id === projectId) {
+      setActiveProject((prev) => ({
+        ...prev,
+        is_archived: false,
+        archived_at: null,
+      }));
+    }
+
+    return true;
+  };
+
   return (
     <ProjectContext.Provider
       value={{
@@ -165,6 +251,8 @@ export function ProjectProvider({ children }) {
         createProject,
         updateProject,
         deleteProject,
+        archiveProject,
+        unarchiveProject,
       }}
     >
       {children}
