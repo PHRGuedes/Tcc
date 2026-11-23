@@ -106,6 +106,8 @@ export function ManageProjectModal({ isOpen, onClose }) {
   const [activeTab, setActiveTab] = useState("general"); // "general" | "stakeholders"
   const [isDeletingProject, setIsDeletingProject] = useState(false);
   const [isArchivingProject, setIsArchivingProject] = useState(false);
+  const [showConfirmArchive, setShowConfirmArchive] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -118,6 +120,18 @@ export function ManageProjectModal({ isOpen, onClose }) {
   const [generalError, setGeneralError] = useState("");
   const [generalSuccess, setGeneralSuccess] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
+
+  // Sincroniza dados do projeto e reseta confirmações ao abrir o modal
+  useEffect(() => {
+    if (isOpen && activeProject) {
+      setProjectName(activeProject.name || "");
+      setProjectDesc(activeProject.description || "");
+      setShowConfirmArchive(false);
+      setShowConfirmDelete(false);
+      setGeneralError("");
+      setGeneralSuccess(false);
+    }
+  }, [isOpen, activeProject]);
 
   // Estado da aba Stakeholders
   const [members, setMembers] = useState([]);
@@ -276,19 +290,16 @@ export function ManageProjectModal({ isOpen, onClose }) {
     }
   };
 
-  // Handler para arquivar projeto
-  const handleArchiveProject = async () => {
+  // Handler para arquivar projeto (confirmação in-app não-bloqueante)
+  const handleConfirmArchive = async () => {
     if (!activeProject?.id || !isCurrentUserAdmin) return;
-    const confirmed = window.confirm(
-      `Deseja realmente arquivar o projeto "${activeProject.name}"? Ele será ocultado da lista ativa, mas todos os requisitos, histórias e dados continuarão preservados integralmente.`
-    );
-    if (!confirmed) return;
 
     setIsArchivingProject(true);
     setGeneralError("");
 
     try {
       await archiveProject(activeProject.id);
+      setShowConfirmArchive(false);
       setGeneralSuccess(true);
       setTimeout(() => setGeneralSuccess(false), 3000);
     } catch (err) {
@@ -308,6 +319,7 @@ export function ManageProjectModal({ isOpen, onClose }) {
 
     try {
       await unarchiveProject(activeProject.id);
+      setShowConfirmArchive(false);
       setGeneralSuccess(true);
       setTimeout(() => setGeneralSuccess(false), 3000);
     } catch (err) {
@@ -318,19 +330,16 @@ export function ManageProjectModal({ isOpen, onClose }) {
     }
   };
 
-  // Handler para excluir projeto permanentemente
-  const handleDeleteProject = async () => {
+  // Handler para excluir projeto permanentemente (confirmação in-app não-bloqueante)
+  const handleConfirmDelete = async () => {
     if (!activeProject?.id || !isCurrentUserAdmin) return;
-    const confirmed = window.confirm(
-      `ATENÇÃO: Deseja realmente excluir o projeto "${activeProject.name}"? Todos os requisitos, user stories e sprints vinculados serão removidos permanentemente.`
-    );
-    if (!confirmed) return;
 
     setIsDeletingProject(true);
     setGeneralError("");
 
     try {
       await deleteProject(activeProject.id);
+      setShowConfirmDelete(false);
       onClose();
     } catch (err) {
       console.error("Erro ao excluir projeto:", err);
@@ -801,11 +810,35 @@ export function ManageProjectModal({ isOpen, onClose }) {
                         )}
                         <span>Desarquivar Projeto</span>
                       </button>
+                    ) : showConfirmArchive ? (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          disabled={isArchivingProject}
+                          onClick={() => setShowConfirmArchive(false)}
+                          className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isArchivingProject}
+                          onClick={handleConfirmArchive}
+                          className="px-3.5 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer"
+                        >
+                          {isArchivingProject ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Archive className="w-3.5 h-3.5" />
+                          )}
+                          <span>Sim, Arquivar</span>
+                        </button>
+                      </div>
                     ) : (
                       <button
                         type="button"
                         disabled={isArchivingProject}
-                        onClick={handleArchiveProject}
+                        onClick={() => setShowConfirmArchive(true)}
                         className="px-3.5 py-2 text-xs font-semibold text-amber-950 dark:text-amber-100 bg-amber-400 hover:bg-amber-500 dark:bg-amber-600 dark:hover:bg-amber-500 rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors disabled:opacity-60 shrink-0 cursor-pointer"
                       >
                         {isArchivingProject ? (
@@ -829,22 +862,50 @@ export function ManageProjectModal({ isOpen, onClose }) {
                         Zona de Perigo — Excluir Projeto
                       </p>
                       <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
-                        Remove permanentemente este projeto, seus requisitos, user stories e sprints.
+                        {showConfirmDelete
+                          ? "Tem certeza absoluta? Todos os dados vinculados serão excluídos permanentemente."
+                          : "Remove permanentemente este projeto, seus requisitos, user stories e sprints."}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      disabled={isDeletingProject}
-                      onClick={handleDeleteProject}
-                      className="px-3.5 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors disabled:opacity-60 shrink-0 cursor-pointer"
-                    >
-                      {isDeletingProject ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3.5 h-3.5" />
-                      )}
-                      <span>Excluir Projeto</span>
-                    </button>
+                    {showConfirmDelete ? (
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          disabled={isDeletingProject}
+                          onClick={() => setShowConfirmDelete(false)}
+                          className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isDeletingProject}
+                          onClick={handleConfirmDelete}
+                          className="px-3.5 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors disabled:opacity-60 cursor-pointer"
+                        >
+                          {isDeletingProject ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                          <span>Sim, Excluir Definitivamente</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isDeletingProject}
+                        onClick={() => setShowConfirmDelete(true)}
+                        className="px-3.5 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-2xs flex items-center gap-1.5 transition-colors disabled:opacity-60 shrink-0 cursor-pointer"
+                      >
+                        {isDeletingProject ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                        <span>Excluir Projeto</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
